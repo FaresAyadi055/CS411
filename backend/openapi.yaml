@@ -1,0 +1,214 @@
+openapi: 3.0.3
+info:
+  title: AppBase API
+  version: 1.0.0
+  description: Generic user + admin API with email/password auth, OAuth, and email OTP verification/reset.
+
+servers:
+  - url: http://localhost:8787
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session_token
+  schemas:
+    Profile:
+      type: object
+      properties:
+        id: { type: string }
+        role: { type: string, enum: [user, admin] }
+        firstName: { type: string, nullable: true }
+        lastName: { type: string, nullable: true }
+        email: { type: string }
+        address: { type: string, nullable: true }
+        locale: { type: string, enum: [en, fr, ar] }
+        createdAt: { type: string }
+        lastUpdated: { type: string }
+    Stats:
+      type: object
+      properties:
+        users: { type: integer }
+        admins: { type: integer }
+        newUsers24h: { type: integer }
+        rateLimited24h: { type: integer }
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+        code: { type: string }
+
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        '200': { description: OK }
+  /api/auth/sign-up/email:
+    post:
+      summary: Register
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email: { type: string }
+                password: { type: string }
+                name: { type: string }
+      responses:
+        '200': { description: Created }
+  /api/auth/sign-in/email:
+    post:
+      summary: Login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200': { description: OK }
+  /api/auth/otp/send-verification:
+    post:
+      summary: Send email verification code
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+                locale: { type: string, enum: [en, fr, ar] }
+      responses:
+        '200': { description: Sent }
+  /api/auth/otp/verify-email:
+    post:
+      summary: Verify email with code
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email: { type: string }
+                code: { type: string }
+      responses:
+        '200': { description: Verified }
+  /api/auth/otp/send-reset:
+    post:
+      summary: Send password reset code
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+                locale: { type: string, enum: [en, fr, ar] }
+      responses:
+        '200': { description: Sent }
+  /api/auth/otp/reset-password:
+    post:
+      summary: Reset password with code
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code, newPassword]
+              properties:
+                email: { type: string }
+                code: { type: string }
+                newPassword: { type: string }
+      responses:
+        '200': { description: Reset }
+  /api/me:
+    get:
+      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
+      summary: Get own profile
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profile: { $ref: '#/components/schemas/Profile' }
+    patch:
+      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
+      summary: Update own profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName: { type: string }
+                lastName: { type: string }
+                address: { type: string, nullable: true }
+                locale: { type: string, enum: [en, fr, ar] }
+      responses:
+        '200':
+          description: Updated profile
+  /api/admin/stats:
+    get:
+      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
+      summary: Admin dashboard stats
+      responses:
+        '200':
+          description: Stats
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Stats' }
+  /api/admin/users:
+    get:
+      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
+      summary: List users (admin)
+      responses:
+        '200':
+          description: User list
+  /api/admin/users/{id}:
+    patch:
+      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
+      summary: Update user (admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { type: string, enum: [user, admin] }
+                firstName: { type: string }
+                lastName: { type: string }
+                address: { type: string, nullable: true }
+                locale: { type: string, enum: [en, fr, ar] }
+      responses:
+        '200': { description: Updated }
+    delete:
+      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
+      summary: Delete user (admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Deleted }
+  /api/admin/rate-limits:
+    get:
+      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
+      summary: Recent rate-limit hits (admin)
+      responses:
+        '200': { description: Items }

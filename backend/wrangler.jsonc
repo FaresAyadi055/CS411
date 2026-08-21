@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "app-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "DEPLOYMENT_MODE": "cloudflare",
+    "CORS_ORIGIN": "https://example.com",
+    "TURSO_SQLITE_DATABASE_URL": "libsql://REPLACE.turso.io",
+    "BETTER_AUTH_URL": "https://api.example.com",
+    "FRONTEND_URL": "https://example.com",
+    "RESEND_FROM": "AppBase <contact@example.com>",
+    "DISABLE_RATE_LIMITING": "false"
+  }
+}
