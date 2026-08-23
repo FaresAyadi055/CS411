@@ -1,11 +1,14 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
-  import { QrCode, RefreshCw, Zap } from '@lucide/svelte'
+  import { QrCode, RefreshCw, Zap, Lock } from '@lucide/svelte'
   import QRCode from 'qrcode'
   import { t } from '../lib/i18n.svelte'
   import api from '../lib/api'
+  import { generateTotp, buildQrPayload } from '../lib/totp'
+  import { getUser } from '../stores/auth.svelte'
 
   const PERIOD = 30
+  const QR_SECRET_KEY = 'fidelito_qr_secret'
 
   let qrDataUri = $state('')
   let totp = $state('')
@@ -16,10 +19,43 @@
   let provisioning = $state(false)
   let fading = $state(false)
   let countdown = $state(30)
+  let secret = $state('')
+  let offline = $state(typeof navigator !== 'undefined' ? !navigator.onLine : false)
   let interval: ReturnType<typeof setInterval> | undefined
 
   function remaining(): number {
     return PERIOD - (Math.floor(Date.now() / 1000) % PERIOD)
+  }
+
+  function saveQrSecret(s: string, userId?: string) {
+    try {
+      localStorage.setItem(QR_SECRET_KEY, JSON.stringify({ secret: s, userId: userId ?? getUser()?.id ?? '' }))
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function loadQrSecret(): { secret: string; userId: string } {
+    try {
+      const raw = localStorage.getItem(QR_SECRET_KEY)
+      if (!raw) return { secret: '', userId: '' }
+      const parsed = JSON.parse(raw)
+      return { secret: parsed.secret ?? '', userId: parsed.userId ?? '' }
+    } catch {
+      return { secret: '', userId: '' }
+    }
+  }
+
+  async function computeLocalQr(): Promise<boolean> {
+    const cached = loadQrSecret()
+    const s = secret || cached.secret
+    const uid = getUser()?.id || cached.userId
+    if (!s || !uid) return false
+    const code = await generateTotp(s)
+    totp = code
+    payload = buildQrPayload(uid, code)
+    await generateQr(payload)
+    return true
   }
 
   async function generateQr(text: string) {
@@ -43,15 +79,25 @@
 
   async function fetchAndUpdate() {
     try {
-      const data = await api.get<{ totp: string; payload: string; refreshInterval: number; remainingSeconds: number }>('/api/client/qr/current')
+      const data = await api.get<{ totp: string; payload: string; secret?: string; refreshInterval: number; remainingSeconds: number }>('/api/client/qr/current')
       totp = data.totp
       payload = data.payload
-      await generateQr(data.payload)
-      error = ''
-    } catch (e: any) {
-      if (e.code !== 'NOT_PROVISIONED') {
-        error = e.message || 'Failed to refresh QR'
+      if (data.secret) {
+        secret = data.secret
+        saveQrSecret(data.secret, getUser()?.id)
       }
+      offline = false
+      error = ''
+      await generateQr(data.payload)
+    } catch (e: any) {
+      if (e.code === 'NOT_PROVISIONED') {
+        error = ''
+        return
+      }
+      offline = true
+      const ok = await computeLocalQr()
+      if (!ok) error = e.message || 'Failed to refresh QR'
+      else error = ''
     }
   }
 
@@ -60,7 +106,7 @@
     countdown = remaining()
     let lastPeriod = Math.floor(Date.now() / 1000 / PERIOD)
 
-    interval = setInterval(() => {
+    interval = setInterval(async () => {
       const r = remaining()
       countdown = r
 
@@ -69,7 +115,11 @@
         lastPeriod = currentPeriod
         fading = true
         setTimeout(() => { fading = false }, 700)
-        fetchAndUpdate()
+        if (!navigator.onLine || offline) {
+          await computeLocalQr()
+        } else {
+          await fetchAndUpdate()
+        }
       }
     }, 100)
   }
@@ -77,9 +127,13 @@
   async function fetchQr() {
     try {
       fading = true
-      const data = await api.get<{ totp: string; payload: string; refreshInterval: number; remainingSeconds: number }>('/api/client/qr/current')
+      const data = await api.get<{ totp: string; payload: string; secret?: string; refreshInterval: number; remainingSeconds: number }>('/api/client/qr/current')
       totp = data.totp
       payload = data.payload
+      if (data.secret) {
+        secret = data.secret
+        saveQrSecret(data.secret, getUser()?.id)
+      }
       provisioned = true
       error = ''
       await generateQr(data.payload)
@@ -100,9 +154,11 @@
     provisioning = true
     error = ''
     try {
-      const data = await api.post<{ totp: string; payload: string; refreshInterval: number }>('/api/client/qr/provision')
+      const data = await api.post<{ totp: string; payload: string; secret: string; refreshInterval: number }>('/api/client/qr/provision')
       totp = data.totp
       payload = data.payload
+      secret = data.secret
+      saveQrSecret(data.secret)
       provisioned = true
       await generateQr(data.payload)
       startClock()
@@ -117,13 +173,29 @@
     }
   }
 
+  async function handleOnline() {
+    offline = false
+    if (provisioned) await fetchQr()
+  }
+
+  function handleOffline() {
+    offline = true
+  }
+
   onMount(async () => {
     await fetchQr()
     if (provisioned) startClock()
+    if (!qrDataUri && (offline || !navigator.onLine)) {
+      await computeLocalQr()
+    }
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
   })
 
   onDestroy(() => {
     clearTimer()
+    window.removeEventListener('online', handleOnline)
+    window.removeEventListener('offline', handleOffline)
   })
 
   $effect(() => {
@@ -188,6 +260,17 @@
 
       <p class="text-xs text-on-surface-variant mt-4">Show this code to the cashier when checking out.</p>
     </div>
+
+    <div class="flex justify-center mt-4">
+      <div class="inline-flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
+        <Lock size={13} />
+        <span>{t('qr.secure_id')}</span>
+      </div>
+    </div>
+
+    {#if offline}
+      <p class="text-center text-xs text-on-surface-variant mt-3">{t('qr.offline')}</p>
+    {/if}
   {/if}
 </main>
 

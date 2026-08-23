@@ -104,6 +104,7 @@ clientRoutes.get('/qr/current', async (c) => {
   return c.json({
     totp,
     payload,
+    secret: existing.totpSecret,
     qrDataUri,
     refreshInterval: PERIOD,
     remainingSeconds: remaining,

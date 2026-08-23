@@ -20,7 +20,50 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
 
 const cache = new Map<string, { data: unknown; timestamp: number }>()
 const CACHE_TTL = 15_000
+const PERSIST_TTL = 24 * 60 * 60 * 1000
 const REQUEST_TIMEOUT_MS = 10_000
+
+// Endpoints with live/secret data that must not be served from a stale cache.
+const CACHE_EXCLUDED = ['/api/client/qr']
+
+function isExcluded(path: string): boolean {
+  return CACHE_EXCLUDED.some((p) => path.includes(p))
+}
+
+function persistKey(key: string): string {
+  return `fidelito_cache_${key}`
+}
+
+function readPersisted(key: string): { data: unknown; timestamp: number } | null {
+  try {
+    const raw = localStorage.getItem(persistKey(key))
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function writePersisted(key: string, data: unknown) {
+  try {
+    localStorage.setItem(persistKey(key), JSON.stringify({ data, timestamp: Date.now() }))
+  } catch {
+    /* storage full or unavailable — ignore */
+  }
+}
+
+function clearPersisted() {
+  try {
+    const toRemove: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith('fidelito_cache_')) toRemove.push(k)
+    }
+    toRemove.forEach((k) => localStorage.removeItem(k))
+  } catch {
+    /* ignore */
+  }
+}
 
 function resourcePrefix(path: string): string {
   const norm = path.startsWith('/') ? path : `/${path}`
@@ -64,8 +107,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   const isGet = !options.method || options.method === 'GET'
   const key = `${BASE}${path}`
+  const excluded = isExcluded(path)
 
-  if (isGet) {
+  if (isGet && !excluded) {
     const entry = cache.get(key)
     if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
       return entry.data as T
@@ -78,6 +122,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   try {
     res = await apiFetch(path, { ...options, headers, credentials: creds })
   } catch {
+    if (isGet && !excluded) {
+      const persisted = readPersisted(key)
+      if (persisted) return persisted.data as T
+    }
     const msg = 'Network error'
     _onRequestError?.({ message: msg, status: 0 })
     throw new ApiRequestError(msg, 0)
@@ -100,9 +148,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   const data = await res.json()
 
-  if (isGet) {
+  if (isGet && !excluded) {
     cache.set(key, { data, timestamp: Date.now() })
-  } else {
+    writePersisted(key, data)
+  } else if (!isGet) {
     clearCache(resourcePrefix(path))
   }
 
@@ -117,6 +166,7 @@ export class ApiRequestError extends Error {
 
 export function clearSession() {
   cache.clear()
+  clearPersisted()
   _onSessionExpired?.()
 }
 
