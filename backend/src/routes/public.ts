@@ -1,10 +1,26 @@
 import { Hono } from 'hono'
-import { eq, or } from 'drizzle-orm'
+import { eq, or, desc } from 'drizzle-orm'
 import { db } from '../db'
 import { merchants } from '../db/schema'
 import type { AppVariables } from '../types/app'
 
 export const publicRoutes = new Hono<{ Variables: AppVariables }>()
+
+publicRoutes.get('/merchants', async (c) => {
+  const rows = await db
+    .select({
+      id: merchants.id,
+      name: merchants.name,
+      logoUrl: merchants.logoUrl,
+      slug: merchants.slug,
+    })
+    .from(merchants)
+    .where(eq(merchants.isActive, true))
+    .orderBy(desc(merchants.createdAt))
+    .limit(24)
+
+  return c.json({ merchants: rows })
+})
 
 publicRoutes.get('/merchant/:ref', async (c) => {
   const ref = c.req.param('ref')

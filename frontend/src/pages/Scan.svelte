@@ -331,7 +331,11 @@
            <div class="absolute inset-0 z-10 w-full h-full"></div>
         </div>
         {#if cameraError}<p class="text-lost-text text-center mb-4">{cameraError}</p>{/if}
-        <button onclick={startScanner} class="btn btn-primary w-full mb-2">{cameraError ? t('scan.retry_camera') : t('scan.start_scanning')}</button>
+        {#if scanning}
+          <button onclick={stopScanner} class="btn bg-lost-bg text-lost-text w-full mb-2">{t('common.cancel')}</button>
+        {:else}
+          <button onclick={startScanner} class="btn btn-primary w-full mb-2">{cameraError ? t('scan.retry_camera') : t('scan.start_scanning')}</button>
+        {/if}
         <button onclick={() => showManual = true} class="btn btn-secondary w-full">{t('scan.enter_manually')}</button>
       {/if}
     </div>
