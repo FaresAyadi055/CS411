@@ -16,6 +16,7 @@ export interface DashboardStats {
   transactionsToday: number
   transactionsThisWeek: number
   transactionsThisMonth: number
+  dailyTransactions: Array<{ date: string; count: number }>
   topCustomers: Array<{
     customerId: string
     firstName: string | null
@@ -51,6 +52,7 @@ export async function getMerchantDashboard(merchantId: string): Promise<Dashboar
     txTodayResult,
     txWeekResult,
     txMonthResult,
+    dailyTransactionsResult,
     topCustomers,
     recentTxs,
   ] = await Promise.all([
@@ -91,6 +93,19 @@ export async function getMerchantDashboard(merchantId: string): Promise<Dashboar
       .select({ count: sql<number>`coalesce(count(*), 0)` })
       .from(stampTransactions)
       .where(and(eq(stampTransactions.merchantId, merchantId), sql`${stampTransactions.createdAt} >= ${startOfMonthMs}`)),
+    db
+      .select({
+        date: sql<string>`strftime('%Y-%m-%d', ${stampTransactions.createdAt} / 1000, 'unixepoch')`,
+        count: sql<number>`count(*)`,
+      })
+      .from(stampTransactions)
+      .where(
+        and(
+          eq(stampTransactions.merchantId, merchantId),
+          sql`${stampTransactions.createdAt} >= ${Date.now() - 7 * 24 * 60 * 60 * 1000}`,
+        ),
+      )
+      .groupBy(sql`strftime('%Y-%m-%d', ${stampTransactions.createdAt} / 1000, 'unixepoch')`),
     db
       .select({
         customerId: customerCards.customerId,
@@ -142,6 +157,7 @@ export async function getMerchantDashboard(merchantId: string): Promise<Dashboar
     transactionsToday: txTodayResult[0]?.count ?? 0,
     transactionsThisWeek: txWeekResult[0]?.count ?? 0,
     transactionsThisMonth: txMonthResult[0]?.count ?? 0,
+    dailyTransactions: dailyTransactionsResult.map((r) => ({ date: r.date, count: r.count })),
     topCustomers: topCustomers.map((c) => ({
       customerId: c.customerId,
       firstName: c.firstName,

@@ -108,8 +108,9 @@ export interface DashboardStats {
     lifetimeStamps: number
   }>
   recentTransactions: StampTransaction[]
-  dailyStamps: Array<{ date: string; count: number }>
+  dailyTransactions: Array<{ date: string; count: number }>
 }
+
 
 export interface StaffMember {
   id: string

@@ -77,6 +77,9 @@ importers:
       better-auth:
         specifier: ^1.6.11
         version: 1.6.11(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@libsql/client@0.17.3)(bun-types@1.3.14)(kysely@0.28.17))(svelte@5.55.7(@typescript-eslint/types@8.59.3))(vue@3.5.34(typescript@6.0.3))
+      chart.js:
+        specifier: ^4.5.1
+        version: 4.5.1
       flag-icons:
         specifier: ^7.5.0
         version: 7.5.0
@@ -92,6 +95,9 @@ importers:
       sveaflet:
         specifier: ^0.1.5
         version: 0.1.5(leaflet@1.9.4)(svelte@5.55.7(@typescript-eslint/types@8.59.3))
+      svelte-chartjs:
+        specifier: ^4.0.1
+        version: 4.0.1(chart.js@4.5.1)(svelte@5.55.7(@typescript-eslint/types@8.59.3))
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^5.0.3
@@ -1075,6 +1081,9 @@ packages:
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
 
+  '@kurkle/color@0.3.4':
+    resolution: {integrity: sha512-M5UknZPHRu3DEDWoipU6sE8PdkZ6Z/S+v4dD+Ke8IaNlpdSQah50lz1KtcFBa2vsdOnwbbnxJwVM4wty6udA5w==}
+
   '@libsql/client@0.17.3':
     resolution: {integrity: sha512-HXk9wiAoJbKFbyBH4O+aEhN6ir5ERXuXvwE5OD2eR4/5RUa3Pw/8L9zrnVdU+iNJitRvisPWaIwmhkO3bH7giA==}
 
@@ -1592,6 +1601,10 @@ packages:
   chalk@5.6.2:
     resolution: {integrity: sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA==}
     engines: {node: ^12.17.0 || ^14.13 || >=16.0.0}
+
+  chart.js@4.5.1:
+    resolution: {integrity: sha512-GIjfiT9dbmHRiYi6Nl2yFCq7kkwdkp1W/lp2J99rX0yo9tgJGn3lKQATztIjb5tVtevcBtIdICNWqlq5+E8/Pw==}
+    engines: {pnpm: '>=8'}
 
   chokidar@4.0.3:
     resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
@@ -2207,6 +2220,12 @@ packages:
     peerDependencies:
       leaflet: ^1.9.4
       svelte: ^4.0.0 || ^5.0.0-next.0
+
+  svelte-chartjs@4.0.1:
+    resolution: {integrity: sha512-4z+0J+w/6ADH2Cy+/AnVek2HxRrznQ7dJfWTybc9BHm9//DCb1BmLrSE3NGDRDLj+kwJbKw2o1tPLBE3CmdHmw==}
+    peerDependencies:
+      chart.js: ^3.5.0 || ^4.0.0
+      svelte: ^5.0.0
 
   svelte-check@4.4.8:
     resolution: {integrity: sha512-67adfgBox5eNSNIvIIwgFizKGdcRrGpiMoNO2obHcYuLz7iTa8Xgm/NGU3ntMFnNm8K1grFOIG6HhMLX/vcN8w==}
@@ -2975,6 +2994,8 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@kurkle/color@0.3.4': {}
+
   '@libsql/client@0.17.3':
     dependencies:
       '@libsql/core': 0.17.3
@@ -3403,6 +3424,10 @@ snapshots:
   camelcase@5.3.1: {}
 
   chalk@5.6.2: {}
+
+  chart.js@4.5.1:
+    dependencies:
+      '@kurkle/color': 0.3.4
 
   chokidar@4.0.3:
     dependencies:
@@ -3979,6 +4004,11 @@ snapshots:
   sveaflet@0.1.5(leaflet@1.9.4)(svelte@5.55.7(@typescript-eslint/types@8.59.3)):
     dependencies:
       leaflet: 1.9.4
+      svelte: 5.55.7(@typescript-eslint/types@8.59.3)
+
+  svelte-chartjs@4.0.1(chart.js@4.5.1)(svelte@5.55.7(@typescript-eslint/types@8.59.3)):
+    dependencies:
+      chart.js: 4.5.1
       svelte: 5.55.7(@typescript-eslint/types@8.59.3)
 
   svelte-check@4.4.8(picomatch@4.0.4)(svelte@5.55.7(@typescript-eslint/types@8.59.3))(typescript@6.0.3):
