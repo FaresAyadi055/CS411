@@ -178,6 +178,10 @@
   .field-label .req {
     color: var(--color-secondary);
   }
+  .field-label .req-optional {
+    color: var(--color-on-surface-variant);
+    font-weight: 400;
+  }
   .input-field {
     width: 100%;
     min-height: 3rem;

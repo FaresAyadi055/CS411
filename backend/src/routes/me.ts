@@ -21,6 +21,7 @@ meRoutes.get('/', async (c) => {
 const patchProfileSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
+  phone: z.string().nullable().optional(),
   address: z.string().nullable().optional(),
   locale: z.enum(['en', 'fr', 'ar']).optional(),
   notificationsEnabled: z.boolean().optional(),

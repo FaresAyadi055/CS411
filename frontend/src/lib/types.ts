@@ -5,6 +5,7 @@ export interface UserProfile {
   role: 'client' | 'cashier' | 'business' | 'admin'
   firstName?: string | null
   lastName?: string | null
+  phone?: string | null
   email: string
   address?: string | null
   locale?: string | null

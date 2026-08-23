@@ -13,6 +13,10 @@
   let themePref = $state<ThemePreference>(getThemePreference())
   const user = $derived(getUser())
   let notifEnabled = $state(user?.notificationsEnabled ?? true)
+  let phone = $state(user?.phone ?? '')
+  let phoneSaved = $state(user?.phone ?? '')
+  let phoneSaving = $state(false)
+  const phoneDirty = $derived(phone.trim() !== (phoneSaved ?? ''))
   let pushState = $state<'idle' | 'unsupported' | 'denied' | 'subscribed'>('idle')
   let pushBusy = $state(false)
 
@@ -41,6 +45,19 @@
       await api.patch('/api/me', { notificationsEnabled: notifEnabled })
     } catch {
       notifEnabled = !notifEnabled
+    }
+  }
+
+  async function savePhone() {
+    const value = phone.trim() || null
+    phoneSaving = true
+    try {
+      await api.patch('/api/me', { phone: value })
+      phoneSaved = value ?? ''
+    } catch {
+      phone = user?.phone ?? ''
+    } finally {
+      phoneSaving = false
     }
   }
 
@@ -77,12 +94,73 @@
       <h2 class="text-sm font-semibold text-on-surface-variant mb-1 flex items-center gap-2">
         <User size={16} /> Account
       </h2>
-      <div class="card px-4 py-3 space-y-2 text-sm">
+      <div class="card px-4 py-3 space-y-3 text-sm">
         <p class="font-semibold">{user.firstName || user.email}</p>
         <p class="text-on-surface-variant text-xs">{user.email}</p>
         <span class="badge {user.role === 'admin' ? 'badge-positive' : 'badge-neutral'}">
           {user.role === 'admin' ? t('admin.role.admin') : user.role === 'business' ? t('admin.role.business') : user.role === 'cashier' ? t('admin.role.cashier') : t('admin.role.client')}
         </span>
+        <div>
+          <label for="set-phone" class="field-label">{t('settings.phone')}</label>
+          <input
+            id="set-phone"
+            bind:value={phone}
+            type="tel"
+            placeholder={t('settings.phone_placeholder')}
+            class="input-field"
+          />
+          {#if phoneDirty}
+            <button onclick={savePhone} disabled={phoneSaving} class="btn btn-primary w-full mt-2">
+              {phoneSaving ? t('common.saving') : t('common.save')}
+            </button>
+          {/if}
+        </div>
+      </div>
+    </section>
+  {/if}
+
+  {#if user}
+    <section class="mb-6">
+      <h2 class="text-sm font-semibold text-on-surface-variant mb-3 flex items-center gap-2">
+        <Bell size={16} /> {t('settings.notifications')}
+      </h2>
+      <div class="card divide-y divide-outline">
+        <div class="flex items-center justify-between min-h-14 px-4 py-3">
+          <div class="min-w-0 pe-3">
+            <p class="text-sm font-medium">{t('settings.notifications.enable')}</p>
+            <p class="text-xs text-on-surface-variant mt-0.5">{t('settings.notifications.enable_desc')}</p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={notifEnabled}
+            aria-label={t('settings.notifications.enable')}
+            onclick={toggleNotifications}
+            class="relative w-11 h-6 rounded-full transition-colors shrink-0 {notifEnabled ? 'bg-primary' : 'bg-surface-container'}"
+          >
+            <span class="absolute top-0.5 start-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform {notifEnabled ? 'translate-x-5' : ''}"></span>
+          </button>
+        </div>
+        {#if VAPID_PUBLIC_KEY}
+          <div class="flex items-center justify-between min-h-14 px-4 py-3">
+            <div class="min-w-0 pe-3">
+              <p class="text-sm font-medium">{t('settings.notifications.push')}</p>
+              <p class="text-xs text-on-surface-variant mt-0.5">
+                {pushState === 'subscribed' ? t('settings.notifications.push_on') : pushState === 'denied' ? t('settings.notifications.push_denied') : t('settings.notifications.push_desc')}
+              </p>
+            </div>
+            {#if pushState === 'subscribed'}
+              <BellRing size={20} class="text-primary shrink-0" />
+            {:else}
+              <button
+                onclick={enablePush}
+                disabled={pushBusy}
+                class="btn btn-outline text-sm px-3 py-1.5 shrink-0 disabled:opacity-50"
+              >
+                {t('settings.notifications.push_enable')}
+              </button>
+            {/if}
+          </div>
+        {/if}
       </div>
     </section>
   {/if}
@@ -130,52 +208,6 @@
       {/each}
     </div>
   </section>
-
-  {#if user?.role === 'client'}
-    <section class="mb-6">
-      <h2 class="text-sm font-semibold text-on-surface-variant mb-3 flex items-center gap-2">
-        <Bell size={16} /> {t('settings.notifications')}
-      </h2>
-      <div class="card divide-y divide-outline">
-        <div class="flex items-center justify-between min-h-14 px-4 py-3">
-          <div class="min-w-0 pe-3">
-            <p class="text-sm font-medium">{t('settings.notifications.enable')}</p>
-            <p class="text-xs text-on-surface-variant mt-0.5">{t('settings.notifications.enable_desc')}</p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={notifEnabled}
-            aria-label={t('settings.notifications.enable')}
-            onclick={toggleNotifications}
-            class="relative w-11 h-6 rounded-full transition-colors shrink-0 {notifEnabled ? 'bg-primary' : 'bg-surface-container'}"
-          >
-            <span class="absolute top-0.5 start-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform {notifEnabled ? 'translate-x-5' : ''}"></span>
-          </button>
-        </div>
-        {#if VAPID_PUBLIC_KEY}
-          <div class="flex items-center justify-between min-h-14 px-4 py-3">
-            <div class="min-w-0 pe-3">
-              <p class="text-sm font-medium">{t('settings.notifications.push')}</p>
-              <p class="text-xs text-on-surface-variant mt-0.5">
-                {pushState === 'subscribed' ? t('settings.notifications.push_on') : pushState === 'denied' ? t('settings.notifications.push_denied') : t('settings.notifications.push_desc')}
-              </p>
-            </div>
-            {#if pushState === 'subscribed'}
-              <BellRing size={20} class="text-primary shrink-0" />
-            {:else}
-              <button
-                onclick={enablePush}
-                disabled={pushBusy}
-                class="btn btn-outline text-sm px-3 py-1.5 shrink-0 disabled:opacity-50"
-              >
-                {t('settings.notifications.push_enable')}
-              </button>
-            {/if}
-          </div>
-        {/if}
-      </div>
-    </section>
-  {/if}
 
   <section class="mb-6">
     <div class="flex items-center gap-3 text-sm">

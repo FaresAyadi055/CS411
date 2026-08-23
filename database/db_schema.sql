@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS "user" (
     "role"         TEXT    NOT NULL DEFAULT 'user',
     "first_name"   TEXT,
     "last_name"    TEXT,
+    "phone"        TEXT,
     "email"        TEXT    NOT NULL UNIQUE,
     "address"      TEXT,
     "locale"       TEXT    DEFAULT 'en',

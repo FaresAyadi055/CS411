@@ -61,6 +61,7 @@ const CREATE = [
     role TEXT NOT NULL DEFAULT 'client',
     first_name TEXT,
     last_name TEXT,
+    phone TEXT,
     email TEXT UNIQUE NOT NULL,
     address TEXT,
     locale TEXT DEFAULT 'en',
@@ -226,6 +227,7 @@ async function runSafe(sql: string, label: string, c: ReturnType<typeof createCl
 const ALTERS = [
   `ALTER TABLE auth_users ADD COLUMN totp_secret TEXT`,
   `ALTER TABLE "user" ADD COLUMN notifications_enabled INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE "user" ADD COLUMN phone TEXT`,
 ]
 
 async function main() {

@@ -582,7 +582,7 @@
           </button>
         </div>
         <div class="flex-1 overflow-y-auto divide-y divide-outline">
-          {#each stats.topCustomers as c, i}
+          {#each (stats?.topCustomers ?? []) as c, i}
             <div class="flex items-center gap-3 p-3">
               <div class="w-6 text-center shrink-0">
                 {#if i < 3}
@@ -618,13 +618,16 @@
           </button>
         </div>
         <div class="flex-1 overflow-y-auto divide-y divide-outline">
-          {#each customersList as c}
+           {#each customersList as c}
             <div class="flex items-center justify-between py-3">
-              <div>
-                <p class="text-sm font-medium">{c.firstName || ''} {c.lastName || ''}</p>
+              <div class="min-w-0">
+                <p class="text-sm font-medium truncate">{c.firstName || ''} {c.lastName || ''}</p>
                 <p class="text-xs text-on-surface-variant">{c.email}</p>
+                {#if c.phone}
+                  <p class="text-xs text-on-surface-variant">{c.phone}</p>
+                {/if}
               </div>
-              <div class="text-right">
+              <div class="text-right shrink-0">
                 <p class="text-sm font-semibold text-primary">{c.fidelityPoints} {t('dashboard.points')}</p>
               </div>
             </div>

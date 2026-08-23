@@ -306,6 +306,7 @@ export async function getMerchantCustomers(merchantId: string, limit = 100, curs
       customerId: customerCards.customerId,
       firstName: user.firstName,
       lastName: user.lastName,
+      phone: user.phone,
       email: user.email,
       fidelityPoints: customerCards.fidelityPoints,
       mealVoucherBalance: customerCards.mealVoucherBalance,

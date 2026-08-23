@@ -49,7 +49,7 @@
       <div class="relative animate-fade-in-up" style="animation-delay: 400ms">
         <div class="stamp-card w-56 sm:w-64">
           <div class="flex items-center justify-between mb-4">
-            <span class="flex items-center gap-1.5 font-bold text-on-surface text-sm">
+            <span class="flex items-center gap-1.5 font-bold text-[#00A63E] text-sm">
               <StarBadge size={22} star={12} />
               {t('app.name')}
             </span>

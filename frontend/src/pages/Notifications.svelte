@@ -3,7 +3,7 @@
   import { t } from '../lib/i18n.svelte'
   import { fetchNotifications, markRead, markAllRead, notif } from '../stores/notifications.svelte'
   import type { AppNotification, NotificationType } from '../lib/types'
-  import { Zap, Coffee, Ticket, ArrowDownCircle, ArrowUpCircle, Bell } from '@lucide/svelte'
+  import { Zap, Coffee, Ticket, ArrowDownCircle, ArrowUpCircle, Bell, ArrowLeft } from '@lucide/svelte'
 
   let items = $state<AppNotification[]>([])
   let loading = $state(true)
@@ -70,41 +70,40 @@
   }
 </script>
 
-  <div class="screen">
-    <div class="screen-header">
-      <button class="icon-btn" onclick={() => navigate('home')} aria-label="Back">
-        <Coffee size={20} />
-      </button>
-      <h1 class="screen-title">{t('nav.notifications')}</h1>
+  <main class="px-4 py-4 max-w-lg mx-auto">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <button class="btn btn-ghost p-2 -ml-2" onclick={() => navigate('home')} aria-label="Back">
+          <ArrowLeft size={20} />
+        </button>
+        <h1 class="text-lg font-bold">{t('nav.notifications')}</h1>
+      </div>
       {#if notif.unreadCount > 0}
         <button class="text-sm text-primary font-medium" onclick={onMarkAll}>
           {t('notifications.mark_all')}
         </button>
-      {:else}
-        <span></span>
       {/if}
     </div>
 
     {#if loading}
-      <p class="empty-state">{t('common.loading')}</p>
+      <p class="text-center text-on-surface-variant py-10">{t('common.loading')}</p>
     {:else if items.length === 0}
-      <div class="empty-state">
-        <Bell size={40} class="opacity-40" />
-        <p>{t('notifications.empty')}</p>
+      <div class="card p-8 text-center">
+        <Bell size={40} class="opacity-40 mx-auto mb-3" />
+        <p class="text-on-surface-variant">{t('notifications.empty')}</p>
       </div>
     {:else}
-      <ul class="divide-y divide-outline">
+      <div class="card divide-y divide-outline">
         {#each items as n (n.id)}
           {@const C = iconFor[n.type]}
-          <li>
-            <button
-              class="w-full flex items-start gap-3 px-4 py-3 text-start"
-              class:bg-surface-container={!n.isRead}
-              onclick={() => onItem(n)}
-            >
-              <span class="mt-1 shrink-0" class:text-primary={!n.isRead}>
-                <C size={20} />
-              </span>
+          <button
+            class="w-full flex items-start gap-3 p-3 text-start"
+            class:bg-surface-container={!n.isRead}
+            onclick={() => onItem(n)}
+          >
+            <span class="mt-1 shrink-0" class:text-primary={!n.isRead}>
+              <C size={20} />
+            </span>
             <span class="min-w-0 flex-1">
               <span class="block text-sm font-medium text-on-surface">{titleFor(n)}</span>
               <span class="block text-xs text-on-surface-variant mt-0.5">{timeAgo(n.createdAt)}</span>
@@ -113,8 +112,7 @@
               <span class="mt-2 w-2 h-2 rounded-full bg-primary shrink-0"></span>
             {/if}
           </button>
-        </li>
-      {/each}
-    </ul>
-  {/if}
-</div>
+        {/each}
+      </div>
+    {/if}
+  </main>

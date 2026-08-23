@@ -98,6 +98,7 @@ export const user = sqliteTable('user', {
   role: text('role', { enum: ['client', 'cashier', 'business', 'admin'] }).notNull().default('client'),
   firstName: text('first_name'),
   lastName: text('last_name'),
+  phone: text('phone'),
   email: text('email').notNull().unique(),
   address: text('address'),
   locale: text('locale').default('en'),

@@ -136,6 +136,7 @@
       }
       provisioned = true
       error = ''
+      offline = false
       await generateQr(data.payload)
       setTimeout(() => { fading = false }, 400)
     } catch (e: any) {
@@ -143,7 +144,14 @@
       if (e.code === 'NOT_PROVISIONED') {
         provisioned = false
       } else {
-        error = e.message || 'Failed to load QR code'
+        const ok = await computeLocalQr()
+        if (ok) {
+          provisioned = true
+          offline = true
+          error = ''
+        } else {
+          error = e.message || 'Failed to load QR code'
+        }
       }
     } finally {
       loading = false

@@ -13,6 +13,8 @@
   let name = $state('')
   let email = $state('')
   let password = $state('')
+  let phoneCode = $state('+216')
+  let phoneNumber = $state('')
   let showPassword = $state(false)
   let consent = $state(false)
   let error = $state('')
@@ -52,6 +54,12 @@
     try {
       await register(email, password, name)
       await login(email, password)
+      const phone = phoneNumber.trim()
+      if (phone) {
+        try {
+          await api.patch('/api/me', { phone: `${phoneCode.trim()} ${phone}` })
+        } catch {}
+      }
       socialLoginRedirect()
     } catch (e) {
       error = (e as Error).message
@@ -194,6 +202,31 @@
               I agree to the platform's Terms of Service and Privacy Policy.
             </span>
           </label>
+
+          <div>
+            <label for="reg-phone" class="field-label">
+              {t('auth.phone.placeholder')}
+              <span class="req-optional">{t('common.optional')}</span>
+            </label>
+            <div class="flex gap-2">
+              <input
+                id="reg-phone-code"
+                bind:value={phoneCode}
+                type="text"
+                inputmode="tel"
+                placeholder="+216"
+                class="input-field w-20 shrink-0"
+              />
+              <input
+                id="reg-phone"
+                bind:value={phoneNumber}
+                type="tel"
+                inputmode="numeric"
+                placeholder="12 345 678"
+                class="input-field flex-1"
+              />
+            </div>
+          </div>
           <button
             type="submit"
             disabled={loading || !consent || !allMet}

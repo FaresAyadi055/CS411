@@ -110,7 +110,7 @@
   </div>
 {:else}
   {#if showTopBar()}
-    <TopBar {locale} locales={locales} onLocaleChange={switchLocale} />
+    <TopBar />
   {/if}
   <div
     class="min-h-screen bg-surface relative max-w-2xl mx-auto"
