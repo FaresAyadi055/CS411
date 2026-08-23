@@ -6,6 +6,7 @@
   import { t } from '../lib/i18n.svelte'
   import { navigate, getRouteParams } from '../stores/router.svelte'
   import api from '../lib/api'
+  import { showToast } from '../stores/toast.svelte'
   import type { StoreCard } from '../lib/types'
   import StarBadge from '../components/StarBadge.svelte'
 
@@ -46,22 +47,40 @@
   let mapEl = $state<HTMLDivElement | null>(null)
   let map: L.Map | null = null
 
+  let subscribing = $state(false)
+
+  async function load() {
+    try {
+      const data = await api.get<{ card: StoreCard; transactions: Tx[]; rewards: Reward[] }>(
+        `/api/client/cards/${merchantId}`,
+      )
+      card = data.card
+      transactions = data.transactions || []
+      rewards = data.rewards || []
+    } catch {}
+    loading = false
+    await tick()
+    createMap()
+  }
+
   onMount(() => {
-    ;(async () => {
-      try {
-        const data = await api.get<{ card: StoreCard; transactions: Tx[]; rewards: Reward[] }>(
-          `/api/client/cards/${merchantId}`,
-        )
-        card = data.card
-        transactions = data.transactions || []
-        rewards = data.rewards || []
-      } catch {}
-      loading = false
-      await tick()
-      createMap()
-    })()
+    load()
     return () => { map?.remove() }
   })
+
+  async function subscribeToMerchant() {
+    subscribing = true
+    try {
+      await api.post('/api/client/subscribe', { merchantId })
+      showToast('success', t('partners.subscribed'))
+      loading = true
+      subscribing = false
+      await load()
+    } catch (e: any) {
+      showToast('error', e.message || t('partners.subscribe_error'))
+      subscribing = false
+    }
+  }
 
   function createMap() {
     if (!mapEl || !card) return
@@ -226,12 +245,21 @@
   {:else}
     <div class="card p-8 text-center">
       <p class="text-sm text-on-surface-variant">{t('partners.not_member')}</p>
-      <button
-        onclick={() => navigate('partners')}
-        class="mt-4 px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-medium"
-      >
-        {t('nav.partners')}
-      </button>
+      <div class="flex items-center justify-center gap-2 mt-4">
+        <button
+          onclick={() => navigate('partners')}
+          class="px-4 py-2 rounded-xl bg-surface-container-high text-on-surface text-sm font-medium"
+        >
+          {t('nav.partners')}
+        </button>
+        <button
+          onclick={subscribeToMerchant}
+          disabled={subscribing}
+          class="px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-medium disabled:opacity-50"
+        >
+          {subscribing ? t('common.loading') : t('partners.subscribe')}
+        </button>
+      </div>
     </div>
   {/if}
 </main>

@@ -86,10 +86,25 @@
     <div class="mx-auto max-w-2xl flex">
       {#each items as item (item.route)}
         {#if item.counter}
-          <div class="flex flex-1 flex-col items-center justify-center gap-0.5 min-h-[3.5rem] py-1.5 text-primary">
-            <item.icon size={20} strokeWidth={2} />
+          <button
+            onclick={() => navigate('points')}
+            aria-label={t(item.labelKey)}
+            class="relative flex flex-1 flex-col items-center justify-center gap-0.5 min-h-[3.5rem] py-1.5 text-primary transition-all duration-200"
+            class:text-primary={isActive(item)}
+            class:text-on-surface-variant={!isActive(item)}
+          >
+            {#if isActive(item)}
+              <span class="absolute top-0 h-0.5 w-10 rounded-full bg-primary animate-slide-in"></span>
+              <span class="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10">
+                <item.icon size={20} strokeWidth={2.5} />
+              </span>
+            {:else}
+              <span class="flex h-7 w-7 items-center justify-center rounded-full hover:bg-surface-container transition-colors">
+                <item.icon size={20} strokeWidth={2} />
+              </span>
+            {/if}
             <span class="text-[10px] font-bold leading-tight">{getBusinessPoints() ?? '—'} {t(item.labelKey)}</span>
-          </div>
+          </button>
         {:else}
           <button
             onclick={() => handleClick(item)}

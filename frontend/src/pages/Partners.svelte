@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Building2, MapPin } from '@lucide/svelte'
+  import { Building2, MapPin, Users } from '@lucide/svelte'
   import { t } from '../lib/i18n.svelte'
   import { navigate } from '../stores/router.svelte'
   import api from '../lib/api'
+  import { showToast } from '../stores/toast.svelte'
   import StarBadge from '../components/StarBadge.svelte'
 
   type Partner = {
@@ -11,10 +12,13 @@
     name: string
     logoUrl: string | null
     address: string | null
+    clientsCount: number
+    subscribed: boolean
   }
 
   let partners = $state<Partner[]>([])
   let loading = $state(true)
+  let subscribingId = $state<string | null>(null)
 
   onMount(async () => {
     try {
@@ -23,6 +27,20 @@
     } catch {}
     loading = false
   })
+
+  async function subscribe(p: Partner) {
+    subscribingId = p.id
+    try {
+      await api.post('/api/client/subscribe', { merchantId: p.id })
+      p.subscribed = true
+      p.clientsCount += 1
+      showToast('success', t('partners.subscribed_to', { name: p.name }))
+    } catch (e: any) {
+      showToast('error', e.message || t('partners.subscribe_error'))
+    } finally {
+      subscribingId = null
+    }
+  }
 </script>
 
 <main class="pb-28 px-4 pt-4 max-w-lg mx-auto">
@@ -50,26 +68,45 @@
   {:else}
     <div class="space-y-3">
       {#each partners as p, i (p.id)}
-        <button
-          onclick={() => navigate('card', { merchantId: p.id })}
+        <div
           class="card p-4 w-full text-left flex items-center gap-3 hover:bg-surface-container-low transition-all duration-200 animate-slide-up"
           style="animation-delay: {i * 40}ms"
         >
-          {#if p.logoUrl}
-            <img src={p.logoUrl} alt="" class="w-12 h-12 rounded-xl object-cover shrink-0" />
-          {:else}
-            <StarBadge size={48} star={22} />
-          {/if}
-          <div class="flex-1 min-w-0">
-            <p class="font-semibold text-sm truncate">{p.name || 'Partner'}</p>
-            {#if p.address}
-              <p class="text-xs text-on-surface-variant mt-0.5 truncate flex items-center gap-1">
-                <MapPin size={12} class="shrink-0" />
-                {p.address}
-              </p>
+          <button
+            onclick={() => navigate('card', { merchantId: p.id })}
+            class="flex items-center gap-3 flex-1 min-w-0 text-left"
+          >
+            {#if p.logoUrl}
+              <img src={p.logoUrl} alt="" class="w-12 h-12 rounded-xl object-cover shrink-0" />
+            {:else}
+              <StarBadge size={48} star={22} />
             {/if}
-          </div>
-        </button>
+            <div class="flex-1 min-w-0">
+              <p class="font-semibold text-sm truncate">{p.name || 'Partner'}</p>
+              {#if p.address}
+                <p class="text-xs text-on-surface-variant mt-0.5 truncate flex items-center gap-1">
+                  <MapPin size={12} class="shrink-0" />
+                  {p.address}
+                </p>
+              {/if}
+              <p class="text-xs text-on-surface-variant mt-0.5 flex items-center gap-1">
+                <Users size={12} class="shrink-0" />
+                {t('partners.clients', { n: p.clientsCount.toString() })}
+              </p>
+            </div>
+          </button>
+          {#if p.subscribed}
+            <span class="text-xs text-found-text font-medium shrink-0">{t('partners.subscribed')}</span>
+          {:else}
+            <button
+              onclick={(e) => { e.stopPropagation(); subscribe(p) }}
+              disabled={subscribingId === p.id}
+              class="btn btn-primary text-xs px-3 py-1.5 shrink-0 disabled:opacity-50"
+            >
+              {subscribingId === p.id ? t('common.loading') : t('partners.subscribe')}
+            </button>
+          {/if}
+        </div>
       {/each}
     </div>
   {/if}

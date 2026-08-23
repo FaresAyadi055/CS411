@@ -19,11 +19,12 @@ export type Route =
   | 'partners'
   | 'transactions'
   | 'notifications'
+  | 'points'
 
 const NAMED_ROUTES: Route[] = [
   'home', 'login', 'register', 'forgot-password', 'about',
   'settings', 'oauth-callback', 'qr', 'cards', 'scan',
-  'dashboard', 'staff', 'rewards', 'business-profile', 'partners', 'transactions', 'notifications',
+  'dashboard', 'staff', 'rewards', 'business-profile', 'partners', 'transactions', 'notifications', 'points',
 ]
 
 const PREFIX_ROUTES = ['admin', 'card']

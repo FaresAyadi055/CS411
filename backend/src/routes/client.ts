@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { eq, and, desc, or } from 'drizzle-orm'
+import { eq, and, desc, or, sql } from 'drizzle-orm'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { db } from '../db'
@@ -255,6 +255,7 @@ clientRoutes.get('/rewards/available', async (c) => {
 })
 
 clientRoutes.get('/merchants', async (c) => {
+  const userId = c.get('userId')!
   const merchantsList = await db
     .select({
       id: merchants.id,
@@ -267,5 +268,27 @@ clientRoutes.get('/merchants', async (c) => {
     .from(merchants)
     .orderBy(merchants.name)
 
-  return c.json({ merchants: merchantsList })
+  const subs = await db
+    .select({
+      merchantId: merchantSubscriptions.merchantId,
+      count: sql<number>`count(*)`,
+    })
+    .from(merchantSubscriptions)
+    .groupBy(merchantSubscriptions.merchantId)
+
+  const subMap = new Map<string, number>(subs.map((s) => [s.merchantId, Number(s.count)]))
+
+  const mySubs = await db
+    .select({ merchantId: merchantSubscriptions.merchantId })
+    .from(merchantSubscriptions)
+    .where(eq(merchantSubscriptions.userId, userId))
+  const mySet = new Set(mySubs.map((s) => s.merchantId))
+
+  const merchantsWithMeta = merchantsList.map((m) => ({
+    ...m,
+    clientsCount: subMap.get(m.id) ?? 0,
+    subscribed: mySet.has(m.id),
+  }))
+
+  return c.json({ merchants: merchantsWithMeta })
 })

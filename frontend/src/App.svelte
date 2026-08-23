@@ -26,6 +26,7 @@
   import Transactions from './pages/Transactions.svelte'
   import Partners from './pages/Partners.svelte'
   import Notifications from './pages/Notifications.svelte'
+  import Points from './pages/Points.svelte'
   import TopBar from './components/TopBar.svelte'
   import BottomNav from './components/BottomNav.svelte'
   import Toast from './components/Toast.svelte'
@@ -116,6 +117,7 @@
     class="min-h-screen bg-surface relative max-w-2xl mx-auto"
     class:max-w-none={getRoute() === 'admin'}
     class:mx-0={getRoute() === 'admin'}
+    class:lg:max-w-7xl={getRoute() === 'dashboard'}
     class:pb-28={showBottomNav()}
   >
     <Toast />
@@ -205,6 +207,12 @@
     {:else if getRoute() === 'notifications'}
       {#if getUser()}
         <Notifications />
+      {:else}
+        <Login />
+      {/if}
+    {:else if getRoute() === 'points'}
+      {#if getUser()}
+        <Points />
       {:else}
         <Login />
       {/if}

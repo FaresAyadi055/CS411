@@ -34,6 +34,10 @@
   const AMBER = '#8a6d00'
   const AMBER_SOFT = 'rgba(138, 109, 0, 0.14)'
 
+  const RING_R = 84
+  const RING_C = 2 * Math.PI * RING_R
+  let ringDash = $state(RING_C)
+
   async function loadData(days: number, showSpinner = false) {
     if (showSpinner) refreshing = true
     else loading = true
@@ -129,6 +133,19 @@
   const capPct = $derived.by(() => {
     if (!stats || stats.monthlyPointCap <= 0) return 0
     return Math.min(100, Math.round((stats.pointsUsedMonth / stats.monthlyPointCap) * 100))
+  })
+
+  const remainingPoints = $derived(
+    stats ? Math.max(0, stats.monthlyPointCap - stats.pointsUsedMonth) : 0,
+  )
+
+  $effect(() => {
+    if (stats && mounted) {
+      const target = RING_C * (1 - capPct / 100)
+      requestAnimationFrame(() => {
+        ringDash = target
+      })
+    }
   })
 
   const maxRewardRedemptions = $derived(
@@ -273,7 +290,7 @@
   }
 </script>
 
-<main class="pb-28 px-4 pt-4 max-w-lg mx-auto">
+<main class="pb-28 px-4 pt-4 max-w-lg lg:max-w-6xl mx-auto">
   <div class="mb-6 animate-fade-in flex items-start justify-between gap-3">
     <div>
       <h1 class="text-xl font-bold">{t('dashboard.title')}</h1>
@@ -292,7 +309,7 @@
   </div>
 
   {#if loading}
-    <div class="grid grid-cols-2 gap-3 mb-6">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
       {#each [1, 2, 3, 4] as _}
         <div class="card p-4">
           <div class="h-4 w-4 rounded skeleton-shimmer mb-3"></div>
@@ -311,7 +328,7 @@
     </div>
   {:else if stats}
     <!-- KPI Cards -->
-    <div class="grid grid-cols-2 gap-3 mb-4">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 mb-4">
       <div class="card p-4 animate-slide-up hover-lift" style="animation-delay: 0ms">
         <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center mb-2">
           <Coins size={16} class="text-primary" />
@@ -384,27 +401,61 @@
       </div>
     </div>
 
-    <!-- Monthly cap usage -->
-    <div class="card p-4 mb-6 animate-slide-up" style="animation-delay: 260ms">
-      <div class="flex items-center justify-between mb-2">
-        <h2 class="text-sm font-semibold">{t('dashboard.monthly_cap_usage')}</h2>
-        <span class="text-xs font-bold" class:text-lost-text={capPct >= 100} class:text-primary={capPct < 100}>{capPct}%</span>
+    <!-- Points balance + monthly cap ring -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <div class="card p-4 animate-slide-up" style="animation-delay: 260ms">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold">{t('points.balance')}</h2>
+        <span class="text-xs font-bold" class:text-lost-text={capPct >= 100} class:text-primary={capPct < 100}>
+          {capPct}% {t('points.used')}
+        </span>
       </div>
-      <div class="h-2 rounded-full bg-surface-container-high overflow-hidden">
-        <div
-          class="h-full rounded-full transition-all duration-1000 ease-out"
-          class:bg-lost-text={capPct >= 100}
-          class:bg-primary={capPct < 100}
-          style="width: {mounted ? capPct : 0}%"
-        ></div>
+      <div class="flex items-center gap-4">
+        <div class="relative w-[120px] h-[120px] shrink-0">
+          <svg viewBox="0 0 200 200" class="w-full h-full -rotate-90">
+            <circle cx="100" cy="100" r={RING_R} fill="none" stroke="var(--color-outline)" stroke-width="16" />
+            <circle
+              cx="100"
+              cy="100"
+              r={RING_R}
+              fill="none"
+              stroke={capPct >= 100 ? 'var(--color-lost-text)' : 'var(--color-primary)'}
+              stroke-width="16"
+              stroke-linecap="round"
+              stroke-dasharray={RING_C}
+              stroke-dashoffset={ringDash}
+              style="transition: stroke-dashoffset 1s ease-out;"
+            />
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span class="text-xl font-bold tabular-nums">{remainingPoints.toLocaleString()}</span>
+            <span class="text-[10px] text-on-surface-variant">{t('points.balance')}</span>
+          </div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="grid grid-cols-2 gap-2">
+            <div class="bg-surface-container-low rounded-lg p-2 text-center">
+              <p class="text-sm font-bold text-lost-text tabular-nums">{stats.pointsUsedMonth.toLocaleString()}</p>
+              <p class="text-[10px] text-on-surface-variant">{t('points.used')}</p>
+            </div>
+            <div class="bg-surface-container-low rounded-lg p-2 text-center">
+              <p class="text-sm font-bold text-primary tabular-nums">{stats.monthlyPointCap.toLocaleString()}</p>
+              <p class="text-[10px] text-on-surface-variant">{t('points.cap')}</p>
+            </div>
+          </div>
+          {#if capPct >= 100}
+            <p class="text-xs font-semibold text-lost-text mt-2 text-center">{t('points.full')}</p>
+          {:else}
+            <p class="text-[11px] text-on-surface-variant mt-2 text-center">
+              {t('points.used_of', { used: stats.pointsUsedMonth.toLocaleString(), cap: stats.monthlyPointCap.toLocaleString() })}
+            </p>
+          {/if}
+        </div>
       </div>
-      <p class="text-xs text-on-surface-variant mt-2">
-        {t('dashboard.of_cap_used', { used: String(stats.pointsUsedMonth), cap: String(stats.monthlyPointCap) })}
-      </p>
     </div>
 
     <!-- Activity chart -->
-    <div class="card p-4 mb-6 animate-slide-up" style="animation-delay: 300ms">
+    <div class="card p-4 animate-slide-up" style="animation-delay: 300ms">
       <div class="flex items-center justify-between mb-1">
         <div>
           <h2 class="text-sm font-semibold">{t('dashboard.activity_overview')}</h2>
@@ -438,9 +489,11 @@
         {/key}
       </div>
     </div>
+    </div>
 
     <!-- Busiest hours + days -->
-    <div class="card p-4 mb-6 animate-slide-up" style="animation-delay: 340ms">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <div class="card p-4 animate-slide-up" style="animation-delay: 340ms">
       <h2 class="text-sm font-semibold mb-0.5">{t('dashboard.busiest_hours')}</h2>
       <p class="text-xs text-on-surface-variant mb-2">{t('dashboard.busiest_hours_desc')}</p>
       <div class="h-28">
@@ -468,9 +521,10 @@
     </div>
 
     <!-- Top rewards -->
+    <div>
     <h2 class="text-sm font-semibold mb-3 flex items-center gap-1.5"><Sparkles size={14} class="text-primary" />{t('dashboard.top_rewards')}</h2>
     {#if stats.topRewards.length > 0}
-      <div class="card p-3 mb-6 space-y-3">
+      <div class="card p-3 space-y-3">
         {#each stats.topRewards as r, i}
           <div class="animate-slide-up" style="animation-delay: {380 + i * 50}ms">
             <div class="flex items-center justify-between mb-1">
@@ -487,15 +541,19 @@
         {/each}
       </div>
     {:else}
-      <div class="card p-6 text-center mb-6">
+      <div class="card p-6 text-center">
         <p class="text-sm text-on-surface-variant">{t('dashboard.no_rewards')}</p>
       </div>
     {/if}
+    </div>
+    </div>
 
     <!-- Top customers -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <div>
     <h2 class="text-sm font-semibold mb-3 flex items-center gap-1.5"><Trophy size={14} class="text-primary" />{t('dashboard.top_customers')}</h2>
     {#if stats.topCustomers.length > 0}
-      <div class="card divide-y divide-outline mb-6">
+      <div class="card divide-y divide-outline">
         {#each stats.topCustomers.slice(0, 5) as c, i}
           <div class="flex items-center gap-3 p-3 animate-slide-up" style="animation-delay: {420 + i * 50}ms">
             <div class="w-6 text-center shrink-0">
@@ -519,17 +577,19 @@
         {/each}
       </div>
       {#if stats.topCustomers.length > 5}
-        <button class="text-sm text-primary font-medium mb-6 block w-full text-center" onclick={() => showTopCustomersModal = true}>
+        <button class="text-sm text-primary font-medium block w-full text-center" onclick={() => showTopCustomersModal = true}>
           {t('dashboard.view_all')}
         </button>
       {/if}
     {:else}
-      <div class="card p-6 text-center mb-6">
+      <div class="card p-6 text-center">
         <p class="text-sm text-on-surface-variant">{t('dashboard.no_customers')}</p>
       </div>
     {/if}
+    </div>
 
     <!-- Recent Activity -->
+    <div>
     <h2 class="text-sm font-semibold mb-3">{t('dashboard.recent_activity')}</h2>
     {#if stats.recentTransactions.length > 0}
       <div class="card divide-y divide-outline">
@@ -570,6 +630,8 @@
         <p class="text-xs text-on-surface-variant mt-1">{t('dashboard.no_activity_desc')}</p>
       </div>
     {/if}
+    </div>
+    </div>
   {/if}
 
   {#if showTopCustomersModal}
