@@ -4,19 +4,37 @@ import {
   merchants,
   customerCards,
   stampTransactions,
+  rewards,
   user,
 } from '../db/schema'
 
 export interface DashboardStats {
+  // Lifetime totals
   totalPointsAdded: number
   totalMealVoucherAdded: number
+  pointsRedeemed: number
+  mealVoucherRedeemed: number
+  redemptionsCount: number
   uniqueCustomers: number
+  newCustomersThisWeek: number
+
+  // Monthly point cap usage
   pointsUsedMonth: number
   monthlyPointCap: number
+
+  // Activity counters (rolling windows, except transactionsToday which is calendar-day)
   transactionsToday: number
   transactionsThisWeek: number
+  transactionsPrevWeek: number
   transactionsThisMonth: number
-  dailyTransactions: Array<{ date: string; count: number }>
+
+  // Time series for the requested window, split by earn vs redeem
+  dailyActivity: Array<{ date: string; earned: number; redeemed: number }>
+
+  // When customers actually show up
+  hourlyDistribution: Array<{ hour: number; count: number }>
+  weekdayDistribution: Array<{ day: number; count: number }>
+
   topCustomers: Array<{
     customerId: string
     firstName: string | null
@@ -25,6 +43,8 @@ export interface DashboardStats {
     mealVoucherBalance: number
     lifetimePoints: number
   }>
+  topRewards: Array<{ rewardId: string; title: string; redemptions: number }>
+
   recentTransactions: Array<{
     id: string
     type: string
@@ -32,28 +52,43 @@ export interface DashboardStats {
     amount: number
     createdAt: Date
     customerName: string
+    rewardTitle: string | null
   }>
 }
 
-export async function getMerchantDashboard(merchantId: string): Promise<DashboardStats> {
+const DAY_MS = 24 * 60 * 60 * 1000
+
+export async function getMerchantDashboard(merchantId: string, days = 14): Promise<DashboardStats> {
+  const windowDays = Math.min(Math.max(days, 7), 90)
+
   const startOfDay = new Date()
   startOfDay.setHours(0, 0, 0, 0)
   const startOfDayMs = startOfDay.getTime()
-  const startOfWeek = new Date(startOfDay)
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay())
-  const startOfWeekMs = startOfWeek.getTime()
   const startOfMonthMs = new Date(startOfDay.getFullYear(), startOfDay.getMonth(), 1).getTime()
+
+  const nowMs = Date.now()
+  const last7dMs = nowMs - 7 * DAY_MS
+  const prev7dStartMs = nowMs - 14 * DAY_MS
+  const seriesStartMs = nowMs - windowDays * DAY_MS
 
   const [
     merchantRows,
     totalPointsResult,
     totalMealResult,
+    pointsRedeemedResult,
+    mealRedeemedResult,
+    redemptionsCountResult,
     uniqueCustomersResult,
+    newCustomersResult,
     txTodayResult,
     txWeekResult,
+    txPrevWeekResult,
     txMonthResult,
-    dailyTransactionsResult,
+    dailyActivityResult,
+    hourlyResult,
+    weekdayResult,
     topCustomers,
+    topRewardsResult,
     recentTxs,
   ] = await Promise.all([
     db.select().from(merchants).where(eq(merchants.id, merchantId)).limit(1),
@@ -78,9 +113,37 @@ export async function getMerchantDashboard(merchantId: string): Promise<Dashboar
         ),
       ),
     db
+      .select({ sum: sql<number>`coalesce(sum(${stampTransactions.amount}), 0)` })
+      .from(stampTransactions)
+      .where(
+        and(
+          eq(stampTransactions.merchantId, merchantId),
+          eq(stampTransactions.balanceType, 'fidelity'),
+          eq(stampTransactions.type, 'REMOVE_POINTS'),
+        ),
+      ),
+    db
+      .select({ sum: sql<number>`coalesce(sum(${stampTransactions.amount}), 0)` })
+      .from(stampTransactions)
+      .where(
+        and(
+          eq(stampTransactions.merchantId, merchantId),
+          eq(stampTransactions.balanceType, 'meal_voucher'),
+          eq(stampTransactions.type, 'REMOVE_MEAL_VOUCHER'),
+        ),
+      ),
+    db
+      .select({ count: sql<number>`coalesce(count(*), 0)` })
+      .from(stampTransactions)
+      .where(and(eq(stampTransactions.merchantId, merchantId), sql`${stampTransactions.rewardId} is not null`)),
+    db
       .select({ count: sql<number>`count(distinct ${customerCards.customerId})` })
       .from(customerCards)
       .where(eq(customerCards.merchantId, merchantId)),
+    db
+      .select({ count: sql<number>`coalesce(count(*), 0)` })
+      .from(customerCards)
+      .where(and(eq(customerCards.merchantId, merchantId), sql`${customerCards.createdAt} >= ${last7dMs}`)),
     db
       .select({ count: sql<number>`coalesce(count(*), 0)` })
       .from(stampTransactions)
@@ -88,7 +151,17 @@ export async function getMerchantDashboard(merchantId: string): Promise<Dashboar
     db
       .select({ count: sql<number>`coalesce(count(*), 0)` })
       .from(stampTransactions)
-      .where(and(eq(stampTransactions.merchantId, merchantId), sql`${stampTransactions.createdAt} >= ${startOfWeekMs}`)),
+      .where(and(eq(stampTransactions.merchantId, merchantId), sql`${stampTransactions.createdAt} >= ${last7dMs}`)),
+    db
+      .select({ count: sql<number>`coalesce(count(*), 0)` })
+      .from(stampTransactions)
+      .where(
+        and(
+          eq(stampTransactions.merchantId, merchantId),
+          sql`${stampTransactions.createdAt} >= ${prev7dStartMs}`,
+          sql`${stampTransactions.createdAt} < ${last7dMs}`,
+        ),
+      ),
     db
       .select({ count: sql<number>`coalesce(count(*), 0)` })
       .from(stampTransactions)
@@ -96,16 +169,28 @@ export async function getMerchantDashboard(merchantId: string): Promise<Dashboar
     db
       .select({
         date: sql<string>`strftime('%Y-%m-%d', ${stampTransactions.createdAt} / 1000, 'unixepoch')`,
+        earned: sql<number>`coalesce(sum(case when ${stampTransactions.type} in ('ADD_POINTS','ADD_MEAL_VOUCHER') then 1 else 0 end), 0)`,
+        redeemed: sql<number>`coalesce(sum(case when ${stampTransactions.type} in ('REMOVE_POINTS','REMOVE_MEAL_VOUCHER') then 1 else 0 end), 0)`,
+      })
+      .from(stampTransactions)
+      .where(and(eq(stampTransactions.merchantId, merchantId), sql`${stampTransactions.createdAt} >= ${seriesStartMs}`))
+      .groupBy(sql`strftime('%Y-%m-%d', ${stampTransactions.createdAt} / 1000, 'unixepoch')`),
+    db
+      .select({
+        hour: sql<number>`cast(strftime('%H', ${stampTransactions.createdAt} / 1000, 'unixepoch') as integer)`,
         count: sql<number>`count(*)`,
       })
       .from(stampTransactions)
-      .where(
-        and(
-          eq(stampTransactions.merchantId, merchantId),
-          sql`${stampTransactions.createdAt} >= ${Date.now() - 7 * 24 * 60 * 60 * 1000}`,
-        ),
-      )
-      .groupBy(sql`strftime('%Y-%m-%d', ${stampTransactions.createdAt} / 1000, 'unixepoch')`),
+      .where(and(eq(stampTransactions.merchantId, merchantId), sql`${stampTransactions.createdAt} >= ${seriesStartMs}`))
+      .groupBy(sql`strftime('%H', ${stampTransactions.createdAt} / 1000, 'unixepoch')`),
+    db
+      .select({
+        day: sql<number>`cast(strftime('%w', ${stampTransactions.createdAt} / 1000, 'unixepoch') as integer)`,
+        count: sql<number>`count(*)`,
+      })
+      .from(stampTransactions)
+      .where(and(eq(stampTransactions.merchantId, merchantId), sql`${stampTransactions.createdAt} >= ${seriesStartMs}`))
+      .groupBy(sql`strftime('%w', ${stampTransactions.createdAt} / 1000, 'unixepoch')`),
     db
       .select({
         customerId: customerCards.customerId,
@@ -122,6 +207,18 @@ export async function getMerchantDashboard(merchantId: string): Promise<Dashboar
       .limit(10),
     db
       .select({
+        rewardId: rewards.id,
+        title: rewards.title,
+        redemptions: sql<number>`count(*)`,
+      })
+      .from(stampTransactions)
+      .innerJoin(rewards, eq(stampTransactions.rewardId, rewards.id))
+      .where(and(eq(stampTransactions.merchantId, merchantId), sql`${stampTransactions.rewardId} is not null`))
+      .groupBy(rewards.id)
+      .orderBy(desc(sql`count(*)`))
+      .limit(5),
+    db
+      .select({
         id: stampTransactions.id,
         type: stampTransactions.type,
         balanceType: stampTransactions.balanceType,
@@ -129,9 +226,11 @@ export async function getMerchantDashboard(merchantId: string): Promise<Dashboar
         createdAt: stampTransactions.createdAt,
         customerFirstName: user.firstName,
         customerLastName: user.lastName,
+        rewardTitle: rewards.title,
       })
       .from(stampTransactions)
       .innerJoin(user, eq(stampTransactions.customerId, user.id))
+      .leftJoin(rewards, eq(stampTransactions.rewardId, rewards.id))
       .where(eq(stampTransactions.merchantId, merchantId))
       .orderBy(desc(stampTransactions.createdAt))
       .limit(20),
@@ -146,18 +245,42 @@ export async function getMerchantDashboard(merchantId: string): Promise<Dashboar
     amount: tx.amount,
     createdAt: tx.createdAt,
     customerName: `${tx.customerFirstName ?? ''} ${tx.customerLastName ?? ''}`.trim(),
+    rewardTitle: tx.rewardTitle ?? null,
   }))
+
+  // Fill in every day of the window (even zero-activity days) so the chart doesn't have gaps.
+  const activityByDate = new Map(dailyActivityResult.map((r) => [r.date, r]))
+  const dailyActivity: DashboardStats['dailyActivity'] = []
+  for (let i = windowDays - 1; i >= 0; i--) {
+    const d = new Date(startOfDayMs - i * DAY_MS)
+    const key = d.toISOString().slice(0, 10)
+    const row = activityByDate.get(key)
+    dailyActivity.push({ date: key, earned: row ? Number(row.earned) : 0, redeemed: row ? Number(row.redeemed) : 0 })
+  }
+
+  const hourlyByHour = new Map(hourlyResult.map((r) => [Number(r.hour), Number(r.count)]))
+  const hourlyDistribution = Array.from({ length: 24 }, (_, hour) => ({ hour, count: hourlyByHour.get(hour) ?? 0 }))
+
+  const weekdayByDay = new Map(weekdayResult.map((r) => [Number(r.day), Number(r.count)]))
+  const weekdayDistribution = Array.from({ length: 7 }, (_, day) => ({ day, count: weekdayByDay.get(day) ?? 0 }))
 
   return {
     totalPointsAdded: totalPointsResult[0]?.sum ?? 0,
     totalMealVoucherAdded: totalMealResult[0]?.sum ?? 0,
+    pointsRedeemed: pointsRedeemedResult[0]?.sum ?? 0,
+    mealVoucherRedeemed: mealRedeemedResult[0]?.sum ?? 0,
+    redemptionsCount: redemptionsCountResult[0]?.count ?? 0,
     uniqueCustomers: uniqueCustomersResult[0]?.count ?? 0,
+    newCustomersThisWeek: newCustomersResult[0]?.count ?? 0,
     pointsUsedMonth: merchant?.pointsUsedMonth ?? 0,
     monthlyPointCap: merchant?.monthlyPointCap ?? 300,
     transactionsToday: txTodayResult[0]?.count ?? 0,
     transactionsThisWeek: txWeekResult[0]?.count ?? 0,
+    transactionsPrevWeek: txPrevWeekResult[0]?.count ?? 0,
     transactionsThisMonth: txMonthResult[0]?.count ?? 0,
-    dailyTransactions: dailyTransactionsResult.map((r) => ({ date: r.date, count: r.count })),
+    dailyActivity,
+    hourlyDistribution,
+    weekdayDistribution,
     topCustomers: topCustomers.map((c) => ({
       customerId: c.customerId,
       firstName: c.firstName,
@@ -165,6 +288,11 @@ export async function getMerchantDashboard(merchantId: string): Promise<Dashboar
       fidelityPoints: c.fidelityPoints,
       mealVoucherBalance: c.mealVoucherBalance,
       lifetimePoints: c.lifetimePoints,
+    })),
+    topRewards: topRewardsResult.map((r) => ({
+      rewardId: r.rewardId,
+      title: r.title,
+      redemptions: Number(r.redemptions),
     })),
     recentTransactions,
   }

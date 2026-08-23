@@ -88,14 +88,41 @@ components:
     DashboardStats:
       type: object
       properties:
-        totalStamps: { type: integer }
+        totalPointsAdded: { type: integer }
+        totalMealVoucherAdded: { type: number }
+        pointsRedeemed: { type: integer }
+        mealVoucherRedeemed: { type: number }
+        redemptionsCount: { type: integer }
         uniqueCustomers: { type: integer }
-        totalRewardsRedeemed: { type: integer }
+        newCustomersThisWeek: { type: integer }
         pointsUsedMonth: { type: integer }
         monthlyPointCap: { type: integer }
-        stampsToday: { type: integer }
-        stampsThisWeek: { type: integer }
-        stampsThisMonth: { type: integer }
+        transactionsToday: { type: integer }
+        transactionsThisWeek: { type: integer }
+        transactionsPrevWeek: { type: integer }
+        transactionsThisMonth: { type: integer }
+        dailyActivity:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string }
+              earned: { type: integer }
+              redeemed: { type: integer }
+        hourlyDistribution:
+          type: array
+          items:
+            type: object
+            properties:
+              hour: { type: integer }
+              count: { type: integer }
+        weekdayDistribution:
+          type: array
+          items:
+            type: object
+            properties:
+              day: { type: integer }
+              count: { type: integer }
         topCustomers:
           type: array
           items:
@@ -104,8 +131,17 @@ components:
               customerId: { type: string }
               firstName: { type: string, nullable: true }
               lastName: { type: string, nullable: true }
-              currentStamps: { type: integer }
-              lifetimeStamps: { type: integer }
+              fidelityPoints: { type: integer }
+              mealVoucherBalance: { type: number }
+              lifetimePoints: { type: integer }
+        topRewards:
+          type: array
+          items:
+            type: object
+            properties:
+              rewardId: { type: string }
+              title: { type: string }
+              redemptions: { type: integer }
         recentTransactions:
           type: array
           items:
@@ -113,9 +149,11 @@ components:
             properties:
               id: { type: string }
               type: { type: string }
-              stampsCount: { type: integer }
+              balanceType: { type: string }
+              amount: { type: number }
               createdAt: { type: integer }
               customerName: { type: string }
+              rewardTitle: { type: string, nullable: true }
               cashierName: { type: string }
 
 security:
@@ -344,6 +382,12 @@ paths:
   /api/business/dashboard:
     get:
       summary: Business analytics dashboard
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema: { type: integer, default: 14, minimum: 7, maximum: 90 }
+          description: Size of the daily/hourly/weekday activity window.
       responses:
         '200':
           description: Dashboard

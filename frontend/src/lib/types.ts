@@ -92,23 +92,40 @@ export interface StampTransaction {
 }
 
 export interface DashboardStats {
-  totalStamps: number
+  totalPointsAdded: number
+  totalMealVoucherAdded: number
+  pointsRedeemed: number
+  mealVoucherRedeemed: number
+  redemptionsCount: number
   uniqueCustomers: number
-  totalRewardsRedeemed: number
+  newCustomersThisWeek: number
   pointsUsedMonth: number
   monthlyPointCap: number
-  stampsToday: number
-  stampsThisWeek: number
-  stampsThisMonth: number
+  transactionsToday: number
+  transactionsThisWeek: number
+  transactionsPrevWeek: number
+  transactionsThisMonth: number
+  dailyActivity: Array<{ date: string; earned: number; redeemed: number }>
+  hourlyDistribution: Array<{ hour: number; count: number }>
+  weekdayDistribution: Array<{ day: number; count: number }>
   topCustomers: Array<{
     customerId: string
     firstName: string | null
     lastName: string | null
-    currentStamps: number
-    lifetimeStamps: number
+    fidelityPoints: number
+    mealVoucherBalance: number
+    lifetimePoints: number
   }>
-  recentTransactions: StampTransaction[]
-  dailyTransactions: Array<{ date: string; count: number }>
+  topRewards: Array<{ rewardId: string; title: string; redemptions: number }>
+  recentTransactions: Array<{
+    id: string
+    type: string
+    balanceType: 'fidelity' | 'meal_voucher'
+    amount: number
+    createdAt: number
+    customerName: string
+    rewardTitle: string | null
+  }>
 }
 
 

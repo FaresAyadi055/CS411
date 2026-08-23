@@ -44,7 +44,10 @@ businessRoutes.get('/dashboard', async (c) => {
   const staff = await getMerchantForUser(userId)
   if (!staff) return c.json({ error: 'No merchant found', code: 'NO_MERCHANT' }, 404)
 
-  const dashboard = await getMerchantDashboard(staff.merchantId)
+  const daysParam = Number(c.req.query('days'))
+  const days = Number.isFinite(daysParam) && daysParam > 0 ? daysParam : 14
+
+  const dashboard = await getMerchantDashboard(staff.merchantId, days)
   return c.json({ dashboard })
 })
 
