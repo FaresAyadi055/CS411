@@ -3,3 +3,5 @@
 # Image storage
 localstorage/
 
+app.db
+sqlite3.exe
