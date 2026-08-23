@@ -8,4 +8,4 @@ export type AppVariables = {
   rateLimited: boolean
 }
 
-export type UserRole = 'admin' | 'user'
+export type UserRole = 'client' | 'cashier' | 'business' | 'admin'

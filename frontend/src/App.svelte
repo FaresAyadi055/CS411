@@ -4,7 +4,8 @@
   import { t, initLocale, setLocale, getLocale, locales } from './lib/i18n.svelte'
   import { initRouter, navigate, getRoute } from './stores/router.svelte'
   import { checkSession, getUser, resolveOAuthSession } from './stores/auth.svelte'
-  import api from './lib/api'
+  import { syncViewMode } from './stores/mode.svelte'
+  import api, { setOnRequestError } from './lib/api'
   import Home from './pages/Home.svelte'
   import Login from './pages/Login.svelte'
   import Register from './pages/Register.svelte'
@@ -14,15 +15,34 @@
   import NotFound from './pages/NotFound.svelte'
   import OAuthCallback from './pages/OAuthCallback.svelte'
   import AdminDashboard from './pages/admin/Dashboard.svelte'
+  import Qr from './pages/Qr.svelte'
+  import Cards from './pages/Cards.svelte'
+  import CardDetail from './pages/CardDetail.svelte'
+  import Scan from './pages/Scan.svelte'
+  import BizDashboard from './pages/BizDashboard.svelte'
+  import Staff from './pages/Staff.svelte'
+  import Rewards from './pages/Rewards.svelte'
+  import BusinessProfile from './pages/BusinessProfile.svelte'
+  import Transactions from './pages/Transactions.svelte'
+  import Partners from './pages/Partners.svelte'
+  import Notifications from './pages/Notifications.svelte'
   import TopBar from './components/TopBar.svelte'
   import BottomNav from './components/BottomNav.svelte'
   import Toast from './components/Toast.svelte'
   import Skeleton from './components/Skeleton.svelte'
+  import OnboardingPrompt from './components/OnboardingPrompt.svelte'
+  import { initPwa } from './lib/pwa.svelte'
+  import { showToast } from './stores/toast.svelte'
   import LocaleFlag from './components/LocaleFlag.svelte'
 
   let ready = $state(false)
   let locale = $state(getLocale())
   let maintenance = $state(import.meta.env.VITE_MAINTENANCE === 'true')
+
+  $effect(() => {
+    getUser()
+    syncViewMode()
+  })
 
   function getLabel(l: typeof locales[number]) {
     return l === 'en' ? 'EN' : l === 'fr' ? 'FR' : 'AR'
@@ -51,6 +71,8 @@
     locale = getLocale()
     initRouter()
     ready = true
+    setOnRequestError((e) => showToast('error', e.message))
+    initPwa()
     checkSession()
     window.addEventListener('message', (e) => {
       if (e.data?.type === 'appbase:oauth-done' && e.source) {
@@ -94,7 +116,6 @@
     class="min-h-screen bg-surface relative max-w-2xl mx-auto"
     class:max-w-none={getRoute() === 'admin'}
     class:mx-0={getRoute() === 'admin'}
-    class:lg:max-w-6xl={getRoute() === 'home'}
     class:pb-28={showBottomNav()}
   >
     <Toast />
@@ -121,6 +142,72 @@
       {:else}
         <Login />
       {/if}
+    {:else if getRoute() === 'qr'}
+      {#if getUser()}
+        <Qr />
+      {:else}
+        <Login />
+      {/if}
+    {:else if getRoute() === 'cards'}
+      {#if getUser()}
+        <Cards />
+      {:else}
+        <Login />
+      {/if}
+    {:else if getRoute() === 'card'}
+      {#if getUser()}
+        <CardDetail />
+      {:else}
+        <Login />
+      {/if}
+    {:else if getRoute() === 'scan'}
+      {#if getUser()}
+        <Scan />
+      {:else}
+        <Login />
+      {/if}
+    {:else if getRoute() === 'dashboard'}
+      {#if getUser()}
+        <BizDashboard />
+      {:else}
+        <Login />
+      {/if}
+    {:else if getRoute() === 'staff'}
+      {#if getUser()}
+        <Staff />
+      {:else}
+        <Login />
+      {/if}
+    {:else if getRoute() === 'rewards'}
+      {#if getUser()}
+        <Rewards />
+      {:else}
+        <Login />
+      {/if}
+    {:else if getRoute() === 'business-profile'}
+      {#if getUser()}
+        <BusinessProfile />
+      {:else}
+        <Login />
+      {/if}
+    {:else if getRoute() === 'transactions'}
+      {#if getUser()}
+        <Transactions />
+      {:else}
+        <Login />
+      {/if}
+    {:else if getRoute() === 'partners'}
+      {#if getUser()}
+        <Partners />
+      {:else}
+        <Login />
+      {/if}
+    {:else if getRoute() === 'notifications'}
+      {#if getUser()}
+        <Notifications />
+      {:else}
+        <Login />
+      {/if}
     {:else if getRoute() === 'oauth-callback'}
       <OAuthCallback />
     {:else if getRoute() === 'not-found'}
@@ -130,6 +217,7 @@
   {#if showBottomNav()}
     <BottomNav />
   {/if}
+  <OnboardingPrompt />
 {/if}
 
 <style>

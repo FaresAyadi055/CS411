@@ -9,6 +9,12 @@ import type { AppVariables } from './types/app'
 import { handleSendVerification, handleVerifyEmail, handleSendReset, handleResetPassword } from './routes/otp'
 import { meRoutes } from './routes/me'
 import { adminRoutes } from './routes/admin'
+import { clientRoutes } from './routes/client'
+import { notificationRoutes } from './routes/notifications'
+import { publicRoutes } from './routes/public'
+import { cashierRoutes } from './routes/cashier'
+import { businessRoutes } from './routes/business'
+import { uploadRoutes } from './routes/uploads'
 import { db } from './db'
 import { user as userSchema } from './db/schema'
 
@@ -44,51 +50,59 @@ export function createApp() {
   app.use('*', rateLimitMiddleware)
   app.use('*', securityHeadersMiddleware)
 
+  app.use('*', async (c, next) => {
+    const id = crypto.randomUUID().slice(0, 8)
+    const start = Date.now()
+    await next()
+    const ms = Date.now() - start
+    console.log(`[${id}] ${c.req.method} ${c.req.path} ${c.res.status} ${ms}ms`)
+  })
+
   app.post('/api/auth/otp/send-verification', handleSendVerification)
   app.post('/api/auth/otp/verify-email', handleVerifyEmail)
   app.post('/api/auth/otp/send-reset', handleSendReset)
   app.post('/api/auth/otp/reset-password', handleResetPassword)
 
   app.on(['POST', 'GET'], '/api/auth/*', (c) => getAuth().handler(c.req.raw))
-
   app.get('/health', async (c) => {
     if (env.deploymentMode !== 'cloudflare') return c.json({ ok: true })
-    const config = {
-      hasTursoUrl: Boolean(env.tursoUrl),
-      hasTursoToken: Boolean(env.tursoToken),
-    }
-    if (!config.hasTursoUrl || !config.hasTursoToken) {
-      return c.json(
-        {
-          ok: false,
-          db: false,
-          error: 'Missing TURSO_SQLITE_DATABASE_URL and/or TURSO_TOKEN on the Worker',
-          config,
-        },
-        503,
-      )
+
+    if (!env.tursoUrl || !env.tursoToken) {
+      return c.json({ ok: false, db: false, error: 'Database not configured' }, 503)
     }
     try {
       await db.select().from(userSchema).limit(1)
-      return c.json({ ok: true, db: true, config })
+      return c.json({ ok: true, db: true })
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       console.error('health db check failed:', message)
-      return c.json({ ok: false, db: false, error: message, config }, 503)
+      return c.json({ ok: false, db: false }, 503)
     }
   })
 
   app.use('/api/me/*', sessionMiddleware)
   app.use('/api/admin/*', sessionMiddleware)
+  app.use('/api/client/*', sessionMiddleware)
+  app.use('/api/cashier/*', sessionMiddleware)
+  app.use('/api/business/*', sessionMiddleware)
+  app.use('/api/uploads/*', sessionMiddleware)
 
   app.route('/api/me', meRoutes)
   app.route('/api/admin', adminRoutes)
+  app.route('/api/client', clientRoutes)
+  app.route('/api/client', notificationRoutes)
+  app.route('/api/public', publicRoutes)
+  app.route('/api/cashier', cashierRoutes)
+  app.route('/api/business', businessRoutes)
+  app.route('/api/uploads', uploadRoutes)
 
   app.notFound((c) => c.json({ error: 'Not found' }, 404))
 
   app.onError((err, c) => {
-    console.error(err)
-    return c.json({ error: 'Internal server error' }, 500)
+    console.error('[500]', err?.name, err?.message)
+    const isProd = env.deploymentMode === 'cloudflare'
+    if (!isProd) console.error(err?.stack)
+    return c.json({ error: err?.message || 'Internal server error' }, 500)
   })
 
   return app

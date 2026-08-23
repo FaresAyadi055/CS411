@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Moon, Sun, Monitor, Settings, LogOut } from '@lucide/svelte'
+  import { Settings, Store, Bell } from '@lucide/svelte'
   import { navigate, getRoute } from '../stores/router.svelte'
   import { t } from '../lib/i18n.svelte'
-  import { getUser, logout } from '../stores/auth.svelte'
-  import { getThemePreference, setTheme, isDarkMode, type ThemePreference } from '../stores/theme.svelte'
+  import { getUser } from '../stores/auth.svelte'
+  import { notif, refreshUnread } from '../stores/notifications.svelte'
   import Tooltip from './Tooltip.svelte'
   import LocaleFlag from './LocaleFlag.svelte'
   import type { Locale } from '../lib/i18n.svelte'
@@ -15,33 +15,13 @@
   } = $props()
 
   let showLang = $state(false)
-  let themePref = $state<ThemePreference>(getThemePreference())
+
+  $effect(() => {
+    if (getUser()?.role === 'client') refreshUnread()
+  })
 
   function getLabel(l: Locale) {
     return l === 'en' ? 'EN' : l === 'fr' ? 'FR' : 'AR'
-  }
-
-  function cycleTheme() {
-    const order: ThemePreference[] = ['light', 'dark', 'system']
-    const next = order[(order.indexOf(themePref) + 1) % order.length]
-    setTheme(next)
-    themePref = next
-  }
-
-  function themeIcon() {
-    if (themePref === 'system') return Monitor
-    return isDarkMode() ? Sun : Moon
-  }
-
-  function themeTooltip(): string {
-    if (themePref === 'light') return t('settings.theme.light')
-    if (themePref === 'dark') return t('settings.theme.dark')
-    return t('settings.theme.system')
-  }
-
-  async function handleLogout() {
-    await logout()
-    navigate('home')
   }
 </script>
 
@@ -54,6 +34,37 @@
 
     <div class="flex items-center gap-1 shrink-0">
       {#if getUser()}
+        {#if getUser()?.role === 'business'}
+        <Tooltip text={t('business.profile.title')} position="bottom">
+          <button
+            onclick={() => navigate('business-profile')}
+            class="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors"
+            class:text-primary={getRoute() === 'business-profile'}
+            aria-label={t('business.profile.title')}
+          >
+            <Store size={18} />
+          </button>
+        </Tooltip>
+      {/if}
+
+      {#if getUser()?.role === 'client'}
+        <Tooltip text={t('nav.notifications')} position="bottom">
+          <button
+            onclick={() => navigate('notifications')}
+            class="relative p-2 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors"
+            class:text-primary={getRoute() === 'notifications'}
+            aria-label={t('nav.notifications')}
+          >
+            <Bell size={18} />
+            {#if notif.unreadCount > 0}
+              <span class="absolute -top-0.5 -end-0.5 min-w-[16px] h-4 px-1 rounded-full bg-error text-on-error text-[10px] font-bold flex items-center justify-center">
+                {notif.unreadCount > 99 ? '99+' : notif.unreadCount}
+              </span>
+            {/if}
+          </button>
+        </Tooltip>
+      {/if}
+
         <Tooltip text={t('nav.settings')} position="bottom">
           <button
             onclick={() => navigate('settings')}
@@ -64,29 +75,7 @@
             <Settings size={18} />
           </button>
         </Tooltip>
-
-        <Tooltip text={t('nav.logout')} position="bottom">
-          <button
-            onclick={handleLogout}
-            class="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors"
-            aria-label={t('nav.logout')}
-          >
-            <LogOut size={18} />
-          </button>
-        </Tooltip>
       {/if}
-
-      <Tooltip text={themeTooltip()} position="bottom">
-        <button
-          onclick={cycleTheme}
-          class="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors"
-          aria-label={themeTooltip()}
-        >
-          {#each [themeIcon()] as Icon}
-            <Icon size={18} />
-          {/each}
-        </button>
-      </Tooltip>
 
       <div class="relative">
         <button

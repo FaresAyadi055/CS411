@@ -1,8 +1,11 @@
 openapi: 3.0.3
 info:
-  title: AppBase API
-  version: 1.0.0
-  description: Generic user + admin API with email/password auth, OAuth, and email OTP verification/reset.
+  title: Fidelito API
+  version: 2.0.0
+  description: |
+    Digital loyalty card platform for Tunisian businesses.
+    Clients display dynamic TOTP QR codes; cashiers scan to stamp loyalty cards.
+    Businesses manage staff, rewards, and analytics. Admins manage merchants.
 
 servers:
   - url: http://localhost:8787
@@ -21,7 +24,7 @@ components:
       type: object
       properties:
         id: { type: string }
-        role: { type: string, enum: [user, admin] }
+        role: { type: string, enum: [client, cashier, business, admin] }
         firstName: { type: string, nullable: true }
         lastName: { type: string, nullable: true }
         email: { type: string }
@@ -29,28 +32,109 @@ components:
         locale: { type: string, enum: [en, fr, ar] }
         createdAt: { type: string }
         lastUpdated: { type: string }
-    Stats:
-      type: object
-      properties:
-        users: { type: integer }
-        admins: { type: integer }
-        newUsers24h: { type: integer }
-        rateLimited24h: { type: integer }
     Error:
       type: object
       properties:
         error: { type: string }
         code: { type: string }
+    Merchant:
+      type: object
+      properties:
+        id: { type: string }
+        ownerId: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        logoUrl: { type: string, nullable: true }
+        stampsPerReward: { type: integer }
+        planTier: { type: string, enum: [starter, growth, pro] }
+        monthlyPointCap: { type: integer }
+        pointsUsedMonth: { type: integer }
+        isActive: { type: boolean }
+        createdAt: { type: integer }
+        updatedAt: { type: integer }
+    CustomerCard:
+      type: object
+      properties:
+        id: { type: string }
+        customerId: { type: string }
+        merchantId: { type: string }
+        currentStamps: { type: integer }
+        lifetimeStamps: { type: integer }
+        rewardsRedeemed: { type: integer }
+        lastVisitAt: { type: integer, nullable: true }
+        createdAt: { type: integer }
+        updatedAt: { type: integer }
+    Reward:
+      type: object
+      properties:
+        id: { type: string }
+        merchantId: { type: string }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        stampsCost: { type: integer }
+        isAvailable: { type: boolean }
+        createdAt: { type: integer }
+    StampTransaction:
+      type: object
+      properties:
+        id: { type: string }
+        merchantId: { type: string }
+        customerId: { type: string }
+        cashierId: { type: string }
+        type: { type: string, enum: [EARN_STAMP, REDEEM_REWARD] }
+        stampsCount: { type: integer }
+        rewardId: { type: string, nullable: true }
+        createdAt: { type: integer }
+    DashboardStats:
+      type: object
+      properties:
+        totalStamps: { type: integer }
+        uniqueCustomers: { type: integer }
+        totalRewardsRedeemed: { type: integer }
+        pointsUsedMonth: { type: integer }
+        monthlyPointCap: { type: integer }
+        stampsToday: { type: integer }
+        stampsThisWeek: { type: integer }
+        stampsThisMonth: { type: integer }
+        topCustomers:
+          type: array
+          items:
+            type: object
+            properties:
+              customerId: { type: string }
+              firstName: { type: string, nullable: true }
+              lastName: { type: string, nullable: true }
+              currentStamps: { type: integer }
+              lifetimeStamps: { type: integer }
+        recentTransactions:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              type: { type: string }
+              stampsCount: { type: integer }
+              createdAt: { type: integer }
+              customerName: { type: string }
+              cashierName: { type: string }
+
+security:
+  - bearerAuth: []
+  - cookieAuth: []
 
 paths:
-  /api/health:
+  /health:
     get:
       summary: Health check
+      security: []
       responses:
         '200': { description: OK }
+
+  # --- Auth ---
   /api/auth/sign-up/email:
     post:
-      summary: Register
+      summary: Register (creates client account with TOTP secret)
+      security: []
       requestBody:
         content:
           application/json:
@@ -62,10 +146,12 @@ paths:
                 password: { type: string }
                 name: { type: string }
       responses:
-        '200': { description: Created }
+        '201': { description: Created }
+
   /api/auth/sign-in/email:
     post:
       summary: Login
+      security: []
       requestBody:
         content:
           application/json:
@@ -77,9 +163,12 @@ paths:
                 password: { type: string }
       responses:
         '200': { description: OK }
+
+  # --- OTP ---
   /api/auth/otp/send-verification:
     post:
       summary: Send email verification code
+      security: []
       requestBody:
         content:
           application/json:
@@ -91,9 +180,11 @@ paths:
                 locale: { type: string, enum: [en, fr, ar] }
       responses:
         '200': { description: Sent }
+
   /api/auth/otp/verify-email:
     post:
       summary: Verify email with code
+      security: []
       requestBody:
         content:
           application/json:
@@ -105,10 +196,173 @@ paths:
                 code: { type: string }
       responses:
         '200': { description: Verified }
-  /api/auth/otp/send-reset:
+
+  # --- Client ---
+  /api/client/qr/provision:
     post:
-      summary: Send password reset code
+      summary: Provision TOTP secret and return QR
+      description: Generates a TOTP secret for the authenticated client. Call once.
+      responses:
+        '200':
+          description: QR payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret: { type: string, description: Base32 TOTP secret }
+                  totp: { type: string, description: Current 6-digit TOTP code }
+                  payload: { type: string, description: JSON QR payload }
+                  qrDataUri: { type: string }
+                  refreshInterval: { type: integer }
+        '409': { description: Already provisioned }
+
+  /api/client/qr/current:
+    get:
+      summary: Get current TOTP QR code
+      description: Returns the current TOTP code and QR payload. Refreshes every 30s.
+      responses:
+        '200':
+          description: Current QR
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totp: { type: string }
+                  payload: { type: string }
+                  qrDataUri: { type: string }
+                  refreshInterval: { type: integer }
+                  remainingSeconds: { type: integer }
+        '400': { description: Not provisioned }
+
+  /api/client/cards:
+    get:
+      summary: List all loyalty cards
+      responses:
+        '200':
+          description: Cards
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cards:
+                    type: array
+                    items: { $ref: '#/components/schemas/CustomerCard' }
+
+  /api/client/cards/{merchantId}:
+    get:
+      summary: Get card detail with transaction history
+      parameters:
+        - { name: merchantId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Card + transactions
+        '404': { description: Card not found }
+
+  /api/client/transactions:
+    get:
+      summary: List own stamp transactions
+      responses:
+        '200':
+          description: Transactions
+
+  /api/client/rewards/available:
+    get:
+      summary: List redeemable rewards across all merchants
+      responses:
+        '200':
+          description: Available rewards
+
+  # --- Cashier ---
+  /api/cashier/stamp:
+    post:
+      summary: Scan QR and stamp a customer's card
+      description: |
+        Cashier scans client's dynamic QR code and submits for stamping.
+        Verifies TOTP, checks anti-replay, enforces point cap.
       requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qrPayload]
+              properties:
+                qrPayload: { type: string, description: Raw QR content (JSON string) }
+                stampsCount: { type: integer, default: 1, maximum: 10 }
+      responses:
+        '200':
+          description: Stamp successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  transactionId: { type: string }
+                  merchantId: { type: string }
+                  customerId: { type: string }
+                  stampsCount: { type: integer }
+                  currentStamps: { type: integer }
+                  lifetimeStamps: { type: integer }
+        '400': { description: Invalid QR or TOTP }
+        '409': { description: QR already used (replay) }
+        '403': { description: Point cap reached }
+
+  /api/cashier/merchant:
+    get:
+      summary: Get own merchant info
+      responses:
+        '200': { description: Merchant }
+
+  /api/cashier/stamps:
+    get:
+      summary: Recent stamps by this cashier
+      responses:
+        '200': { description: Stamps }
+
+  /api/cashier/redeem:
+    post:
+      summary: Redeem a reward for a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerId, rewardId]
+              properties:
+                customerId: { type: string }
+                rewardId: { type: string }
+      responses:
+        '200': { description: Redeemed }
+        '400': { description: Insufficient stamps }
+
+  # --- Business ---
+  /api/business/dashboard:
+    get:
+      summary: Business analytics dashboard
+      responses:
+        '200':
+          description: Dashboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dashboard: { $ref: '#/components/schemas/DashboardStats' }
+
+  /api/business/staff:
+    get:
+      summary: List staff members
+      responses:
+        '200': { description: Staff list }
+    post:
+      summary: Add staff member
+      requestBody:
+        required: true
         content:
           application/json:
             schema:
@@ -116,27 +370,112 @@ paths:
               required: [email]
               properties:
                 email: { type: string }
-                locale: { type: string, enum: [en, fr, ar] }
+                role: { type: string, enum: [owner, cashier], default: cashier }
       responses:
-        '200': { description: Sent }
-  /api/auth/otp/reset-password:
+        '200': { description: Added }
+        '404': { description: User not found }
+        '409': { description: Already staff }
+
+  /api/business/staff/{userId}:
+    delete:
+      summary: Remove staff member
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Removed }
+    patch:
+      summary: Update staff role
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { type: string, enum: [owner, cashier] }
+      responses:
+        '200': { description: Updated }
+
+  /api/business/customers:
+    get:
+      summary: List customers with stamp balances
+      responses:
+        '200': { description: Customers }
+
+  /api/business/transactions:
+    get:
+      summary: All transactions (paginated)
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 50 } }
+      responses:
+        '200': { description: Transactions }
+
+  /api/business/rewards:
+    get:
+      summary: List rewards
+      responses:
+        '200': { description: Rewards }
     post:
-      summary: Reset password with code
+      summary: Create reward
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string }
+                description: { type: string }
+                stampsCost: { type: integer, default: 10 }
+      responses:
+        '201': { description: Created }
+
+  /api/business/rewards/{id}:
+    patch:
+      summary: Update reward
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
       requestBody:
         content:
           application/json:
             schema:
               type: object
-              required: [email, code, newPassword]
               properties:
-                email: { type: string }
-                code: { type: string }
-                newPassword: { type: string }
+                title: { type: string }
+                description: { type: string }
+                stampsCost: { type: integer }
+                isAvailable: { type: boolean }
       responses:
-        '200': { description: Reset }
+        '200': { description: Updated }
+    delete:
+      summary: Delete reward
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Deleted }
+
+  /api/business/settings:
+    patch:
+      summary: Update merchant settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                stampsPerReward: { type: integer }
+                monthlyPointCap: { type: integer }
+                logoUrl: { type: string, nullable: true }
+      responses:
+        '200': { description: Updated }
+
+  # --- Profile ---
   /api/me:
     get:
-      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
       summary: Get own profile
       responses:
         '200':
@@ -148,7 +487,6 @@ paths:
                 properties:
                   profile: { $ref: '#/components/schemas/Profile' }
     patch:
-      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
       summary: Update own profile
       requestBody:
         content:
@@ -161,29 +499,40 @@ paths:
                 address: { type: string, nullable: true }
                 locale: { type: string, enum: [en, fr, ar] }
       responses:
-        '200':
-          description: Updated profile
+        '200': { description: Updated profile }
+
+  # --- Admin ---
   /api/admin/stats:
     get:
-      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
-      summary: Admin dashboard stats
+      summary: Platform-wide stats
       responses:
         '200':
           description: Stats
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Stats' }
+              schema:
+                type: object
+                properties:
+                  users: { type: integer }
+                  admins: { type: integer }
+                  newUsers24h: { type: integer }
+                  rateLimited24h: { type: integer }
+
   /api/admin/users:
     get:
-      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
-      summary: List users (admin)
+      summary: List all users
       responses:
-        '200':
-          description: User list
+        '200': { description: Users }
+
   /api/admin/users/{id}:
+    get:
+      summary: Get user by ID
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: User }
     patch:
-      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
-      summary: Update user (admin)
+      summary: Update user
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       requestBody:
@@ -192,7 +541,7 @@ paths:
             schema:
               type: object
               properties:
-                role: { type: string, enum: [user, admin] }
+                role: { type: string, enum: [client, cashier, business, admin] }
                 firstName: { type: string }
                 lastName: { type: string }
                 address: { type: string, nullable: true }
@@ -200,15 +549,86 @@ paths:
       responses:
         '200': { description: Updated }
     delete:
-      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
-      summary: Delete user (admin)
+      summary: Delete user
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         '200': { description: Deleted }
+
   /api/admin/rate-limits:
     get:
-      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
-      summary: Recent rate-limit hits (admin)
+      summary: Recent rate-limit hits
       responses:
         '200': { description: Items }
+
+  /api/admin/merchants:
+    get:
+      summary: List all merchants
+      responses:
+        '200':
+          description: Merchants
+    post:
+      summary: Create merchant + assign owner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, slug, ownerEmail]
+              properties:
+                name: { type: string }
+                slug: { type: string }
+                ownerEmail: { type: string }
+                stampsPerReward: { type: integer, default: 10 }
+                planTier: { type: string, enum: [starter, growth, pro], default: starter }
+                monthlyPointCap: { type: integer, default: 300 }
+      responses:
+        '201': { description: Created }
+
+  /api/admin/merchants/{id}:
+    get:
+      summary: Get merchant details
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Merchant }
+    patch:
+      summary: Update merchant
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                stampsPerReward: { type: integer }
+                planTier: { type: string, enum: [starter, growth, pro] }
+                monthlyPointCap: { type: integer }
+                isActive: { type: boolean }
+      responses:
+        '200': { description: Updated }
+    delete:
+      summary: Soft-delete merchant (set inactive)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Deleted }
+
+  /api/admin/merchants/{id}/staff:
+    get:
+      summary: List merchant staff
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Staff }
+
+  /api/admin/merchants/{id}/stats:
+    get:
+      summary: Merchant analytics
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Stats }

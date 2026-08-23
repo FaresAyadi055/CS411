@@ -3,24 +3,28 @@
   import { Eye, EyeOff } from '@lucide/svelte'
   import { t } from '../lib/i18n.svelte'
   import { navigate } from '../stores/router.svelte'
+  import { api } from '../lib/api'
   import {
     login,
     checkSession,
     getAuthErrorFromUrl,
     clearAuthErrorFromUrl,
-    hasRole,
     getUser,
     getLastLoginMethod,
     setLastLoginMethod,
+    socialLoginRedirect,
+    getReferral,
     type LoginMethod,
   } from '../stores/auth.svelte'
   import SocialLoginButtons from '../components/SocialLoginButtons.svelte'
 
+  type ReferralPreview = { name: string; logoUrl: string | null }
   let email = $state('')
   let password = $state('')
   let showPassword = $state(false)
   let error = $state('')
   let loading = $state(false)
+  let referral = $state<ReferralPreview | null>(null)
 
   let lastLoginMethod = $state<LoginMethod | null>(getLastLoginMethod())
 
@@ -29,6 +33,15 @@
     if (authError) {
       error = authError
       clearAuthErrorFromUrl()
+    }
+    const ref = getReferral()
+    if (ref) {
+      api
+        .getPublic<{ merchant: ReferralPreview }>(`/api/public/merchant/${encodeURIComponent(ref)}`)
+        .then((res) => {
+          if (res.merchant) referral = res.merchant
+        })
+        .catch(() => {})
     }
     loading = true
     checkSession()
@@ -41,11 +54,7 @@
   })
 
   async function redirectAfterLogin() {
-    if (hasRole('admin')) {
-      navigate('admin', { section: 'overview' })
-      return
-    }
-    navigate('home')
+    socialLoginRedirect()
   }
 
   async function handleSubmit() {
@@ -69,6 +78,15 @@
       <h1 class="text-2xl font-bold text-primary">{t('app.name')}</h1>
       <p class="text-on-surface-variant text-sm mt-1">{t('app.tagline')}</p>
     </div>
+
+    {#if referral}
+      <div class="card p-3 mb-4 flex items-center gap-3">
+        {#if referral.logoUrl}
+          <img src={referral.logoUrl} alt="" class="w-10 h-10 rounded-lg object-cover shrink-0" />
+        {/if}
+        <p class="text-sm text-on-surface-variant">{t('referral.join', { name: referral.name })}</p>
+      </div>
+    {/if}
 
     <div class="card p-6">
       <h2 class="text-lg font-bold tracking-tight mb-4">{t('auth.sign.in')}</h2>

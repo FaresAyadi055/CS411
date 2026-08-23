@@ -22,6 +22,9 @@ export interface CloudflareBindings {
   DISABLE_AUTH?: string
   FRONTEND_URL?: string
   USE_LOCAL_DB?: string
+  VAPID_PUBLIC_KEY?: string
+  VAPID_PRIVATE_KEY?: string
+  VAPID_SUBJECT?: string
 }
 
 /** All keys we read from Worker env — must be listed explicitly (secrets are not enumerable). */
@@ -44,6 +47,9 @@ export const BINDING_KEYS = [
   'DISABLE_AUTH',
   'FRONTEND_URL',
   'USE_LOCAL_DB',
+  'VAPID_PUBLIC_KEY',
+  'VAPID_PRIVATE_KEY',
+  'VAPID_SUBJECT',
 ] as const satisfies readonly (keyof CloudflareBindings)[]
 
 let cfBindings: CloudflareBindings = {}
@@ -177,5 +183,14 @@ export const env = {
   },
   get frontendUrl() {
     return readBinding('FRONTEND_URL') ?? 'http://localhost:5173'
+  },
+  get vapidPublicKey() {
+    return readBinding('VAPID_PUBLIC_KEY') ?? ''
+  },
+  get vapidPrivateKey() {
+    return readBinding('VAPID_PRIVATE_KEY') ?? ''
+  },
+  get vapidSubject() {
+    return readBinding('VAPID_SUBJECT') ?? 'mailto:hello@fidelito.tn'
   },
 }

@@ -2,9 +2,11 @@ import {
   sqliteTable,
   text,
   integer,
+  real,
   index,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
+import { sql } from 'drizzle-orm'
 
 // --- Better Auth (table: auth_users mapped as `user` in adapter) ---
 export const authUsers = sqliteTable('auth_users', {
@@ -13,6 +15,7 @@ export const authUsers = sqliteTable('auth_users', {
   email: text('email').notNull().unique(),
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   image: text('image'),
+  totpSecret: text('totp_secret'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -92,12 +95,13 @@ export const user = sqliteTable('user', {
   id: text('id')
     .primaryKey()
     .references(() => authUsers.id, { onDelete: 'cascade' }),
-  role: text('role', { enum: ['user', 'admin'] }).notNull().default('user'),
+  role: text('role', { enum: ['client', 'cashier', 'business', 'admin'] }).notNull().default('client'),
   firstName: text('first_name'),
   lastName: text('last_name'),
   email: text('email').notNull().unique(),
   address: text('address'),
   locale: text('locale').default('en'),
+  notificationsEnabled: integer('notifications_enabled', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').$defaultFn(() => new Date().toISOString()),
   lastUpdated: text('last_updated').$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
@@ -142,6 +146,134 @@ export const apikey = sqliteTable('apikey', {
 }, (table) => ({
   refIdx: index('apikey_ref_idx').on(table.referenceId),
   keyIdx: index('apikey_key_idx').on(table.key),
+}))
+
+// --- Loyalty Platform Tables ---
+
+export const merchants = sqliteTable('merchants', {
+  id: text('id').primaryKey(),
+  ownerId: text('owner_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  logoUrl: text('logo_url'),
+  lat: real('lat'),
+  lng: real('lng'),
+  address: text('address'),
+  stampsPerReward: integer('stamps_per_reward').notNull().default(10),
+  planTier: text('plan_tier').notNull().default('starter'),
+  monthlyPointCap: integer('monthly_point_cap').notNull().default(300),
+  pointsUsedMonth: integer('points_used_month').notNull().default(0),
+  secretHmacKey: text('secret_hmac_key').notNull(),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  ownerIdx: index('merchants_owner_idx').on(table.ownerId),
+  slugIdx: uniqueIndex('merchants_slug_idx').on(table.slug),
+}))
+
+export const merchantStaff = sqliteTable('merchant_staff', {
+  id: text('id').primaryKey(),
+  merchantId: text('merchant_id').notNull().references(() => merchants.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  role: text('role').notNull().default('cashier'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  merchantIdx: index('staff_merchant_idx').on(table.merchantId),
+  userIdx: index('staff_user_idx').on(table.userId),
+}))
+
+export const customerCards = sqliteTable('customer_cards', {
+  id: text('id').primaryKey(),
+  customerId: text('customer_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  merchantId: text('merchant_id').notNull().references(() => merchants.id, { onDelete: 'cascade' }),
+  fidelityPoints: integer('fidelity_points').notNull().default(0),
+  mealVoucherBalance: real('meal_voucher_balance').notNull().default(0),
+  lifetimePoints: integer('lifetime_points').notNull().default(0),
+  mealVoucherTotal: real('meal_voucher_total').notNull().default(0),
+  lastVisitAt: integer('last_visit_at', { mode: 'timestamp_ms' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  customerIdx: index('card_customer_idx').on(table.customerId),
+  merchantIdx: index('card_merchant_idx').on(table.merchantId),
+  customerMerchantUnq: uniqueIndex('card_customer_merchant_unq').on(table.customerId, table.merchantId),
+}))
+
+export const rewards = sqliteTable('rewards', {
+  id: text('id').primaryKey(),
+  merchantId: text('merchant_id').notNull().references(() => merchants.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  stampsCost: integer('stamps_cost').notNull().default(10),
+  imageUrl: text('image_url'),
+  isAvailable: integer('is_available', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  merchantIdx: index('rewards_merchant_idx').on(table.merchantId),
+}))
+
+export const stampTransactions = sqliteTable('stamp_transactions', {
+  id: text('id').primaryKey(),
+  merchantId: text('merchant_id').notNull().references(() => merchants.id, { onDelete: 'cascade' }),
+  customerId: text('customer_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  cashierId: text('cashier_id').notNull().references(() => authUsers.id),
+  type: text('type').notNull(), // 'ADD_POINTS', 'REMOVE_POINTS', 'ADD_MEAL_VOUCHER', 'REMOVE_MEAL_VOUCHER'
+  balanceType: text('balance_type').notNull(), // 'fidelity' or 'meal_voucher'
+  rewardId: text('reward_id').references(() => rewards.id, { onDelete: 'set null' }),
+  amount: real('amount').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  merchantIdx: index('tx_merchant_idx').on(table.merchantId),
+  customerIdx: index('tx_customer_idx').on(table.customerId),
+  cashierIdx: index('tx_cashier_idx').on(table.cashierId),
+  merchantCreatedIdx: index('tx_merchant_created_idx').on(table.merchantId, table.createdAt),
+}))
+
+export const usedQrSignatures = sqliteTable('used_qr_signatures', {
+  signature: text('signature').primaryKey(),
+  userId: text('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  scannedAt: integer('scanned_at', { mode: 'timestamp_ms' }).notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => ({
+  expiresIdx: index('used_qr_exp_idx').on(table.expiresAt),
+}))
+
+/** A customer is auto-subscribed to a merchant the first time they earn a point there. */
+export const merchantSubscriptions = sqliteTable('merchant_subscriptions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  merchantId: text('merchant_id').notNull().references(() => merchants.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  userMerchantUnq: uniqueIndex('sub_user_merchant_unq').on(table.userId, table.merchantId),
+}))
+
+/** In-app notifications, one per relevant event (e.g. a loyalty transaction). */
+export const notifications = sqliteTable('notifications', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  merchantId: text('merchant_id').references(() => merchants.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  data: text('data'),
+  isRead: integer('is_read', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  userIdx: index('notif_user_idx').on(table.userId),
+  userCreatedIdx: index('notif_user_created_idx').on(table.userId, table.createdAt),
+}))
+
+/** Web Push subscriptions for a user's devices (used by future server-side push delivery). */
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  endpoint: text('endpoint').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  endpointUnq: uniqueIndex('push_endpoint_unq').on(table.endpoint),
+  userIdx: index('push_user_idx').on(table.userId),
 }))
 
 /** Schema object passed to Better Auth drizzle adapter */

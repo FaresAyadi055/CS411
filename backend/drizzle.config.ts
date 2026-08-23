@@ -18,4 +18,8 @@ export default defineConfig({
   dbCredentials: useTurso
     ? { url: tursoUrl, authToken: tursoToken }
     : { url: localDbPath },
+  studio: {
+    port: 4242,
+    host: 'localhost',
+  },
 })

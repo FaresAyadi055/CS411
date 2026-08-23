@@ -26,7 +26,7 @@
 
   async function handleSendOtp() {
     if (!email) {
-      error = 'Enter your email address'
+      error = t('error.required')
       return
     }
     error = ''
@@ -52,7 +52,7 @@
 
   async function handleVerifyOtp() {
     if (otpCode.length !== 6) {
-      error = 'Enter the 6-digit code'
+      error = t('auth.otp.verify.title')
       return
     }
     error = ''
@@ -61,7 +61,7 @@
 
   async function handleResetPassword() {
     if (newPassword.length < 8) {
-      error = 'Password must be at least 8 characters'
+      error = t('auth.password.requirement.length')
       return
     }
     error = ''
@@ -109,10 +109,10 @@
       {#if step === 'email'}
         <button onclick={() => navigate('login')} class="flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface mb-4">
           <ArrowLeft size={16} />
-          Back to login
+          {t('auth.otp.back')}
         </button>
-        <h2 class="text-lg font-bold tracking-tight mb-1">Reset your password</h2>
-        <p class="text-sm text-on-surface-variant mb-4">Enter your email and we'll send you a reset code.</p>
+        <h2 class="text-lg font-bold tracking-tight mb-1">{t('auth.reset.title')}</h2>
+        <p class="text-sm text-on-surface-variant mb-4">{t('auth.reset.desc')}</p>
 
         {#if error}
           <div class="bg-lost-bg text-lost-text text-sm p-3 rounded-lg mb-3">{error}</div>
@@ -137,16 +137,16 @@
             disabled={loading || !email}
             class="btn btn-primary w-full"
           >
-            {loading ? t('common.loading') : 'Send reset code'}
+            {loading ? t('common.loading') : t('auth.reset.send.btn')}
           </button>
         </form>
       {:else if step === 'otp'}
         <button onclick={() => step = 'email'} class="flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface mb-4">
           <ArrowLeft size={16} />
-          Change email
+          {t('auth.reset.change.email')}
         </button>
-        <h2 class="text-lg font-bold tracking-tight mb-1">Enter reset code</h2>
-        <p class="text-sm text-on-surface-variant mb-4">Enter the 6-digit code sent to {email}</p>
+        <h2 class="text-lg font-bold tracking-tight mb-1">{t('auth.reset.otp.title')}</h2>
+        <p class="text-sm text-on-surface-variant mb-4">{t('auth.reset.otp.desc', { email })}</p>
 
         {#if error}
           <div class="bg-lost-bg text-lost-text text-sm p-3 rounded-lg mb-3">{error}</div>
@@ -159,7 +159,7 @@
             type="text"
             inputmode="numeric"
             pattern="[0-9]*"
-            placeholder="000000"
+            placeholder={t('auth.otp.placeholder')}
             maxlength={6}
             autocomplete="one-time-code"
             required
@@ -170,26 +170,26 @@
             disabled={otpCode.length !== 6}
             class="btn btn-primary w-full"
           >
-            Continue
+            {t('common.confirm')}
           </button>
         </form>
 
         <div class="text-center mt-4">
           {#if otpCooldown > 0}
-            <p class="text-xs text-on-surface-variant">Resend code in {otpCooldown}s</p>
+            <p class="text-xs text-on-surface-variant">{t('auth.otp.resend.cooldown', { s: otpCooldown.toString() })}</p>
           {:else}
             <button onclick={handleResend} disabled={loading} class="text-sm text-primary font-semibold hover:underline disabled:opacity-50">
-              {loading ? 'Sending...' : 'Resend code'}
+              {loading ? t('auth.otp.resend.sending') : t('auth.otp.resend')}
             </button>
           {/if}
         </div>
       {:else if step === 'password'}
         <button onclick={() => step = 'otp'} class="flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface mb-4">
           <ArrowLeft size={16} />
-          Back
+          {t('auth.otp.back')}
         </button>
-        <h2 class="text-lg font-bold tracking-tight mb-1">Set new password</h2>
-        <p class="text-sm text-on-surface-variant mb-4">Choose a new password for your account.</p>
+        <h2 class="text-lg font-bold tracking-tight mb-1">{t('auth.reset.new.title')}</h2>
+        <p class="text-sm text-on-surface-variant mb-4">{t('auth.reset.new.desc')}</p>
 
         {#if error}
           <div class="bg-lost-bg text-lost-text text-sm p-3 rounded-lg mb-3">{error}</div>
@@ -229,7 +229,7 @@
             disabled={loading || newPassword.length < 8}
             class="btn btn-primary w-full"
           >
-            {loading ? t('common.loading') : 'Reset password'}
+            {loading ? t('common.loading') : t('auth.reset.new.btn')}
           </button>
         </form>
       {:else}
@@ -237,8 +237,8 @@
           <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-found-bg mb-4">
             <Check size={28} class="text-found-text" />
           </div>
-          <h2 class="text-lg font-bold tracking-tight mb-1">Password reset</h2>
-          <p class="text-sm text-on-surface-variant mb-6">Your password has been reset successfully.</p>
+          <h2 class="text-lg font-bold tracking-tight mb-1">{t('auth.reset.done.title')}</h2>
+          <p class="text-sm text-on-surface-variant mb-6">{t('auth.reset.done.desc')}</p>
           <button
             onclick={() => navigate('login')}
             class="btn btn-primary w-full"

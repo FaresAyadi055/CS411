@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
-  import { Users, ShieldCheck, UserPlus, ShieldAlert, ChevronLeft, ChevronRight } from '@lucide/svelte'
+  import { Users, ShieldCheck, UserPlus, ShieldAlert, Store, ChevronLeft, ChevronRight, Plus, Trash2 } from '@lucide/svelte'
   import { t } from '../../lib/i18n.svelte'
   import { navigate } from '../../stores/router.svelte'
   import { showToast } from '../../stores/toast.svelte'
   import api, { invalidateCache } from '../../lib/api'
-  import type { AdminStats, AdminUser, RateLimitItem } from '../../lib/types'
+  import type { AdminStats, AdminUser, RateLimitItem, Merchant } from '../../lib/types'
 
   let tab = $state('overview')
   let loading = $state(true)
@@ -14,7 +14,12 @@
 
   let stats = $state<AdminStats | null>(null)
   let users = $state<AdminUser[]>([])
+  let merchants = $state<Merchant[]>([])
   let rateLimits = $state<RateLimitItem[]>([])
+
+  let showCreateMerchant = $state(false)
+  let merchantForm = $state({ name: '', slug: '', email: '' })
+  let creating = $state(false)
 
   let userPage = $state(0)
   let limitPage = $state(0)
@@ -31,14 +36,16 @@
     loading = true
     loadError = false
     try {
-      const [statsData, usersData, limitsData] = await Promise.all([
+      const [statsData, usersData, limitsData, merchantsData] = await Promise.all([
         api.get<AdminStats>('/api/admin/stats'),
         api.get<{ users: AdminUser[] }>('/api/admin/users'),
         api.get<{ items: RateLimitItem[] }>('/api/admin/rate-limits'),
+        api.get<{ merchants: Merchant[] }>('/api/admin/merchants'),
       ])
       stats = statsData
       users = usersData.users
       rateLimits = limitsData.items
+      merchants = merchantsData.merchants
     } catch (e) {
       console.error(e)
       loadError = true
@@ -58,11 +65,11 @@
   }
 
   async function toggleRole(u: AdminUser) {
-    const nextRole = u.role === 'admin' ? 'user' : 'admin'
+    const nextRole = u.role === 'admin' ? 'client' : 'admin'
     try {
       await api.patch<{ user: AdminUser }>(`/api/admin/users/${u.id}`, { role: nextRole })
       u.role = nextRole
-      showToast('success', nextRole === 'admin' ? t('admin.role.admin') : t('admin.role.user'))
+      showToast('success', nextRole === 'admin' ? t('admin.role.admin') : t('admin.role.client'))
     } catch {
       showToast('error', t('error.generic'))
     }
@@ -79,18 +86,48 @@
     }
   }
 
+  async function createMerchant() {
+    if (!merchantForm.name.trim() || !merchantForm.slug.trim()) return
+    creating = true
+    try {
+      await api.post('/api/admin/merchants', merchantForm)
+      const data = await api.get<{ merchants: Merchant[] }>('/api/admin/merchants')
+      merchants = data.merchants
+      showCreateMerchant = false
+      merchantForm = { name: '', slug: '', email: '' }
+      showToast('success', 'Merchant created')
+    } catch (e: any) {
+      showToast('error', e.message || 'Failed to create merchant')
+    } finally {
+      creating = false
+    }
+  }
+
+  async function deleteMerchant(m: Merchant) {
+    if (!confirm(`Delete merchant "${m.name}"?`)) return
+    try {
+      await api.delete(`/api/admin/merchants/${m.id}`)
+      merchants = merchants.filter(x => x.id !== m.id)
+      showToast('success', 'Merchant deleted')
+    } catch {
+      showToast('error', t('error.generic'))
+    }
+  }
+
   async function refreshData() {
     refreshing = true
     invalidateCache()
     try {
-      const [statsData, usersData, limitsData] = await Promise.all([
+      const [statsData, usersData, limitsData, merchantsData] = await Promise.all([
         api.get<AdminStats>('/api/admin/stats'),
         api.get<{ users: AdminUser[] }>('/api/admin/users'),
         api.get<{ items: RateLimitItem[] }>('/api/admin/rate-limits'),
+        api.get<{ merchants: Merchant[] }>('/api/admin/merchants'),
       ])
       stats = statsData
       users = usersData.users
       rateLimits = limitsData.items
+      merchants = merchantsData.merchants
     } catch (e) {
       console.error(e)
       loadError = true
@@ -98,12 +135,13 @@
     refreshing = false
   }
 
-  const statCards = [
-    { icon: Users, key: 'users', value: () => stats?.users ?? 0 },
-    { icon: ShieldCheck, key: 'admins', value: () => stats?.admins ?? 0 },
-    { icon: UserPlus, key: 'new24h', value: () => stats?.newUsers24h ?? 0 },
-    { icon: ShieldAlert, key: 'rate24h', value: () => stats?.rateLimited24h ?? 0 },
-  ]
+  const statCards = $derived([
+    { icon: Users, key: 'users', value: stats?.users ?? 0 },
+    { icon: ShieldCheck, key: 'admins', value: stats?.admins ?? 0 },
+    { icon: UserPlus, key: 'new24h', value: stats?.newUsers24h ?? 0 },
+    { icon: ShieldAlert, key: 'rate24h', value: stats?.rateLimited24h ?? 0 },
+    { icon: Store, key: 'merchants', value: merchants.length },
+  ])
 </script>
 
 <main class="px-4 py-4">
@@ -113,7 +151,7 @@
   </div>
 
   <div class="flex gap-2 mb-4 overflow-x-auto">
-    {#each ['overview', 'users', 'rate.limits'] as tabKey}
+    {#each ['overview', 'users', 'merchants', 'rate.limits'] as tabKey}
       <button
         onclick={() => tab = tabKey === 'rate.limits' ? 'rate-limits' : tabKey}
         class="px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors"
@@ -148,7 +186,7 @@
       {#each statCards as s}
         <div class="card p-4">
           <s.icon size={20} class="text-primary mb-2" />
-          <p class="text-2xl font-bold tracking-tight">{s.value()}</p>
+          <p class="text-2xl font-bold tracking-tight">{s.value}</p>
           <p class="text-xs text-on-surface-variant">{t('admin.stats.' + s.key)}</p>
         </div>
       {/each}
@@ -172,12 +210,12 @@
               <td class="px-3 py-2.5 text-on-surface-variant text-xs truncate max-w-[12rem]">{u.email}</td>
               <td class="px-3 py-2.5">
                 <span class="badge {u.role === 'admin' ? 'badge-positive' : 'badge-neutral'}">
-                  {u.role === 'admin' ? t('admin.role.admin') : t('admin.role.user')}
+                  {u.role === 'admin' ? t('admin.role.admin') : t('admin.role.client')}
                 </span>
               </td>
               <td class="px-3 py-2.5 text-right whitespace-nowrap">
                 <button onclick={() => toggleRole(u)} class="text-xs font-semibold text-primary hover:underline px-2 py-1">
-                  {u.role === 'admin' ? t('admin.role.user') : t('admin.role.admin')}
+                  {u.role === 'admin' ? t('admin.role.client') : t('admin.role.admin')}
                 </button>
                 <button onclick={() => deleteUser(u)} class="text-xs font-semibold text-secondary hover:underline px-2 py-1">
                   {t('common.delete')}
@@ -199,6 +237,43 @@
         </button>
       </div>
     {/if}
+  {:else if tab === 'merchants'}
+    <div class="flex items-center justify-between mb-3">
+      <p class="text-sm text-on-surface-variant">{merchants.length} merchants</p>
+      <button onclick={() => showCreateMerchant = !showCreateMerchant} class="btn btn-primary !text-xs !px-3 !py-1.5">
+        <Plus size={14} class="mr-1" />
+        Create
+      </button>
+    </div>
+    {#if showCreateMerchant}
+      <div class="card p-4 mb-3 animate-slide-up">
+        <form onsubmit={(e) => { e.preventDefault(); createMerchant() }} class="space-y-3">
+          <input bind:value={merchantForm.name} placeholder="Business name" class="w-full px-3 py-2 rounded-xl border border-outline bg-surface-card text-sm" required />
+          <input bind:value={merchantForm.slug} placeholder="Slug (e.g. my-cafe)" class="w-full px-3 py-2 rounded-xl border border-outline bg-surface-card text-sm" required />
+          <input bind:value={merchantForm.email} type="email" placeholder="Owner email" class="w-full px-3 py-2 rounded-xl border border-outline bg-surface-card text-sm" required />
+          <div class="flex gap-2">
+            <button type="button" onclick={() => showCreateMerchant = false} class="flex-1 px-3 py-2 rounded-xl border border-outline text-sm">Cancel</button>
+            <button type="submit" disabled={creating} class="flex-1 btn btn-primary !text-xs">{creating ? 'Creating...' : 'Create'}</button>
+          </div>
+        </form>
+      </div>
+    {/if}
+    <div class="space-y-2">
+      {#each merchants as m (m.id)}
+        <div class="card p-3 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <Store size={18} class="text-primary" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold truncate">{m.name}</p>
+            <p class="text-xs text-on-surface-variant">/{m.slug}</p>
+          </div>
+          <button onclick={() => deleteMerchant(m)} class="p-2 rounded-lg hover:bg-lost-bg transition-colors">
+            <Trash2 size={14} class="text-lost-text" />
+          </button>
+        </div>
+      {/each}
+    </div>
   {:else if tab === 'rate-limits'}
     <p class="text-sm text-on-surface-variant mb-3">{rateLimits.length} {t('admin.rate.limits')}</p>
     <div class="card overflow-hidden">

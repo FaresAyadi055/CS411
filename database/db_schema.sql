@@ -16,20 +16,11 @@ CREATE TABLE IF NOT EXISTS "auth_users" (
     "email"          TEXT    NOT NULL UNIQUE,
     "email_verified" INTEGER NOT NULL DEFAULT 0,
     "image"          TEXT,
-    "totp_secret"    TEXT    NOT NULL, -- Base32 secret key for TOTP dynamic QR
+    "totp_secret"    TEXT,            -- Base32 secret key for TOTP dynamic QR (clients only)
     "created_at"     INTEGER NOT NULL,
     "updated_at"     INTEGER NOT NULL
 );
 
--- Anti-replay protection for scanned tokens
-CREATE TABLE IF NOT EXISTS "used_qr_signatures" (
-    "signature"  TEXT    PRIMARY KEY, -- Formatted as "userId:timeStep"
-    "user_id"    TEXT    NOT NULL REFERENCES "auth_users"("id") ON DELETE CASCADE,
-    "scanned_at" INTEGER NOT NULL,
-    "expires_at" INTEGER NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS "used_qr_exp_idx" ON "used_qr_signatures" ("expires_at");
 CREATE INDEX IF NOT EXISTS "auth_users_email_idx" ON "auth_users" ("email");
 
 CREATE TABLE IF NOT EXISTS "session" (
@@ -122,6 +113,7 @@ CREATE TABLE IF NOT EXISTS "user" (
     "email"        TEXT    NOT NULL UNIQUE,
     "address"      TEXT,
     "locale"       TEXT    DEFAULT 'en',
+    "notifications_enabled" INTEGER NOT NULL DEFAULT 1,
     "created_at"   TEXT,
     "last_updated" TEXT
 );
@@ -150,6 +142,9 @@ CREATE TABLE IF NOT EXISTS "merchants" (
     "name"              TEXT    NOT NULL,
     "slug"              TEXT    NOT NULL UNIQUE,
     "logo_url"          TEXT,
+    "lat"               REAL,
+    "lng"               REAL,
+    "address"           TEXT,
     "stamps_per_reward" INTEGER NOT NULL DEFAULT 10,
     "plan_tier"         TEXT    NOT NULL DEFAULT 'starter', -- 'starter', 'growth', 'pro'
     "monthly_point_cap" INTEGER NOT NULL DEFAULT 300,
@@ -175,17 +170,18 @@ CREATE TABLE IF NOT EXISTS "merchant_staff" (
 
 CREATE INDEX IF NOT EXISTS "staff_merchant_idx" ON "merchant_staff" ("merchant_id");
 
--- 3. CUSTOMER STAMP BALANCES (Multi-Tenant Membership)
+-- 3. CUSTOMER BALANCES (Fidelity Points + Meal Voucher per Merchant)
 CREATE TABLE IF NOT EXISTS "customer_cards" (
-    "id"               TEXT    PRIMARY KEY,
-    "customer_id"      TEXT    NOT NULL REFERENCES "auth_users"("id") ON DELETE CASCADE,
-    "merchant_id"      TEXT    NOT NULL REFERENCES "merchants"("id") ON DELETE CASCADE,
-    "current_stamps"   INTEGER NOT NULL DEFAULT 0,
-    "lifetime_stamps"  INTEGER NOT NULL DEFAULT 0,
-    "rewards_redeemed" INTEGER NOT NULL DEFAULT 0,
-    "last_visit_at"    INTEGER,
-    "created_at"       INTEGER NOT NULL,
-    "updated_at"       INTEGER NOT NULL,
+    "id"                      TEXT    PRIMARY KEY,
+    "customer_id"             TEXT    NOT NULL REFERENCES "auth_users"("id") ON DELETE CASCADE,
+    "merchant_id"             TEXT    NOT NULL REFERENCES "merchants"("id") ON DELETE CASCADE,
+    "fidelity_points"         INTEGER NOT NULL DEFAULT 0,
+    "meal_voucher_balance"    REAL    NOT NULL DEFAULT 0,
+    "lifetime_points"         INTEGER NOT NULL DEFAULT 0,
+    "meal_voucher_total"      REAL    NOT NULL DEFAULT 0,
+    "last_visit_at"           INTEGER,
+    "created_at"              INTEGER NOT NULL,
+    "updated_at"              INTEGER NOT NULL,
     UNIQUE("customer_id", "merchant_id")
 );
 
@@ -194,32 +190,34 @@ CREATE INDEX IF NOT EXISTS "card_merchant_idx" ON "customer_cards" ("merchant_id
 
 -- 4. AVAILABLE REWARDS CATALOG
 CREATE TABLE IF NOT EXISTS "rewards" (
-    "id"            TEXT    PRIMARY KEY,
-    "merchant_id"   TEXT    NOT NULL REFERENCES "merchants"("id") ON DELETE CASCADE,
-    "title"         TEXT    NOT NULL, -- e.g. "Free Cappuccino"
-    "description"   TEXT,
-    "stamps_cost"   INTEGER NOT NULL DEFAULT 10,
-    "is_available"  INTEGER NOT NULL DEFAULT 1,
-    "created_at"    INTEGER NOT NULL
+   "id"            TEXT    PRIMARY KEY,
+   "merchant_id"   TEXT    NOT NULL REFERENCES "merchants"("id") ON DELETE CASCADE,
+   "title"         TEXT    NOT NULL, -- e.g. "Free Cappuccino"
+   "description"   TEXT,
+   "stamps_cost"   INTEGER NOT NULL DEFAULT 10,
+   "image_url"     TEXT,
+   "is_available"  INTEGER NOT NULL DEFAULT 1,
+   "created_at"    INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS "rewards_merchant_idx" ON "rewards" ("merchant_id");
 
--- 5. AUDIT LOG TRANSACTIONS (Stamps Earned & Rewards Claimed)
+-- 5. AUDIT LOG TRANSACTIONS (Points & Meal Voucher)
 CREATE TABLE IF NOT EXISTS "stamp_transactions" (
     "id"            TEXT    PRIMARY KEY,
     "merchant_id"   TEXT    NOT NULL REFERENCES "merchants"("id") ON DELETE CASCADE,
     "customer_id"   TEXT    NOT NULL REFERENCES "auth_users"("id") ON DELETE CASCADE,
     "cashier_id"    TEXT    NOT NULL REFERENCES "auth_users"("id"),
-    "type"          TEXT    NOT NULL, -- 'EARN_STAMP', 'REDEEM_REWARD'
-    "stamps_count"  INTEGER NOT NULL DEFAULT 1,
-    "reward_id"     TEXT    REFERENCES "rewards"("id"),
-    "is_offline_sync" INTEGER NOT NULL DEFAULT 0, -- 1 if scanned/submitted during offline mode
+    "type"          TEXT    NOT NULL, -- 'ADD_POINTS', 'REMOVE_POINTS', 'ADD_MEAL_VOUCHER', 'REMOVE_MEAL_VOUCHER'
+    "balance_type"  TEXT    NOT NULL, -- 'fidelity' or 'meal_voucher'
+    "reward_id"     TEXT    REFERENCES "rewards"("id") ON DELETE SET NULL,
+    "amount"        REAL    NOT NULL DEFAULT 0,
     "created_at"    INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS "tx_merchant_idx" ON "stamp_transactions" ("merchant_id");
 CREATE INDEX IF NOT EXISTS "tx_customer_idx" ON "stamp_transactions" ("customer_id");
+CREATE INDEX IF NOT EXISTS "tx_merchant_created_idx" ON "stamp_transactions" ("merchant_id", "created_at");
 
 -- 6. ANTI-FRAUD / REPLAY LOCK (Prevents Screenshot QR Reuse)
 CREATE TABLE IF NOT EXISTS "used_qr_signatures" (
@@ -230,3 +228,41 @@ CREATE TABLE IF NOT EXISTS "used_qr_signatures" (
 );
 
 CREATE INDEX IF NOT EXISTS "used_qr_exp_idx" ON "used_qr_signatures" ("expires_at");
+
+-- 7. MERCHANT SUBSCRIPTIONS (auto-created when a customer earns a point)
+CREATE TABLE IF NOT EXISTS "merchant_subscriptions" (
+    "id"          TEXT    PRIMARY KEY,
+    "user_id"     TEXT    NOT NULL REFERENCES "auth_users"("id") ON DELETE CASCADE,
+    "merchant_id" TEXT    NOT NULL REFERENCES "merchants"("id") ON DELETE CASCADE,
+    "created_at"  INTEGER NOT NULL,
+    UNIQUE("user_id", "merchant_id")
+);
+
+CREATE INDEX IF NOT EXISTS "sub_user_idx" ON "merchant_subscriptions" ("user_id");
+
+-- 8. NOTIFICATIONS (in-app; one per relevant event)
+CREATE TABLE IF NOT EXISTS "notifications" (
+    "id"          TEXT    PRIMARY KEY,
+    "user_id"     TEXT    NOT NULL REFERENCES "auth_users"("id") ON DELETE CASCADE,
+    "merchant_id" TEXT    REFERENCES "merchants"("id") ON DELETE CASCADE,
+    "type"        TEXT    NOT NULL,
+    "data"        TEXT,
+    "is_read"     INTEGER NOT NULL DEFAULT 0,
+    "created_at"  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS "notif_user_idx" ON "notifications" ("user_id");
+CREATE INDEX IF NOT EXISTS "notif_user_created_idx" ON "notifications" ("user_id", "created_at");
+
+-- 9. WEB PUSH SUBSCRIPTIONS (per-device; used by future server-side push delivery)
+CREATE TABLE IF NOT EXISTS "push_subscriptions" (
+    "id"          TEXT    PRIMARY KEY,
+    "user_id"     TEXT    NOT NULL REFERENCES "auth_users"("id") ON DELETE CASCADE,
+    "endpoint"    TEXT    NOT NULL,
+    "p256dh"      TEXT    NOT NULL,
+    "auth"        TEXT    NOT NULL,
+    "created_at"  INTEGER NOT NULL,
+    UNIQUE("endpoint")
+);
+
+CREATE INDEX IF NOT EXISTS "push_user_idx" ON "push_subscriptions" ("user_id");

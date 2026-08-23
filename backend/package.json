@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/server.ts",
+    "dev": "concurrently --names server,studio --prefix-colors blue,green \"bun --watch src/server.ts\" \"bun drizzle-kit studio\"",
     "dev:worker": "wrangler dev",
     "start": "bun src/server.ts",
     "deploy": "wrangler deploy --minify",
@@ -27,10 +27,13 @@
     "hono": "^4.12.19",
     "resend": "^6.12.3",
     "ulid": "^3.0.2",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/web-push": "^3.6.4",
+    "concurrently": "^10.0.5",
     "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.10",
     "typescript": "~6.0.3",

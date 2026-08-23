@@ -1,10 +1,10 @@
-# AppBase
+# Fidelito
 
-A generic, bare-bones backend + frontend starter — a PocketBase-style alternative. Users + admins, auth, and a minimal UI.
+Digital loyalty card PWA for Tunisian businesses. Customers get dynamic TOTP QR codes that refresh every 30 seconds; cashiers scan to stamp loyalty cards. Businesses manage staff, rewards, and analytics.
 
 ## Domain
 
-Generic starter template. Swap branding/domain before deploying.
+Fidelito.tn — a digital loyalty card platform for small to medium Tunisian businesses. Each business (merchant) has isolated loyalty cards. The code works across any partner, but loyalty data is per-merchant.
 
 ## Tech Stack
 
@@ -13,6 +13,7 @@ Generic starter template. Swap branding/domain before deploying.
 | Backend | Hono + Drizzle ORM + Better Auth |
 | Database | Turso (SQLite) with libSQL client |
 | Auth | Better Auth (email/password, bearer tokens, Google/Facebook OAuth, email OTP) |
+| QR/TOTP | RFC 6238 TOTP (HMAC-SHA1, 6 digits, 30s period) — hand-rolled with Web Crypto |
 | Frontend | Svelte 5 (runes mode, CSR) + Vite 8 |
 | Styling | Tailwind CSS v4 |
 | Icons | @lucide/svelte |
@@ -22,98 +23,95 @@ Generic starter template. Swap branding/domain before deploying.
 ## Project Structure
 
 ```
-app/
-├── backend/                    # Hono API server
-│   ├── src/
-│   │   ├── db/                 # Schema, manual migrations, seed
-│   │   ├── routes/             # API handlers (otp, me, admin)
-│   │   ├── services/           # Business logic (otp)
-│   │   ├── middleware/         # Auth, rate limiting, role checks, security headers
-│   │   ├── config/             # Env configuration
-│   │   └── lib/                # Shared utilities (password hashing, errors)
-│   └── .env
-├── database/                   # SQLite DB (app.db)
-├── frontend/                   # Svelte SPA
-│   ├── src/
-│   │   ├── pages/              # Home, Login, Register, ForgotPassword, Settings, About, admin/
-│   │   ├── components/         # TopBar, BottomNav, SocialLoginButtons, Toast, LocaleFlag, Tooltip, Skeleton
-│   │   ├── stores/             # router, auth, theme, toast, i18n
-│   │   └── lib/                # API client, types, i18n translations
-│   └── .env
+├── app/
+│   ├── backend/                    # Hono API server
+│   │   ├── src/
+│   │   │   ├── db/                 # Schema, manual migrations, seed
+│   │   │   ├── routes/             # API handlers (otp, me, admin, client, cashier, business)
+│   │   │   ├── services/           # Business logic (otp, totp, stamp, analytics)
+│   │   │   ├── middleware/         # Auth, rate limiting, role checks, security headers
+│   │   │   ├── config/             # Env configuration
+│   │   │   └── lib/                # Shared utilities (password hashing, errors)
+│   │   └── .env
+│   └── frontend/                   # Svelte SPA
+├── database/                       # SQLite DB + schema SQL
 └── pnpm-workspace.yaml
 ```
 
-## Frontend Architecture
+## Roles
 
-### Routes (hash-based, custom router in `stores/router.svelte.ts`)
+| Role | Description |
+|------|-------------|
+| `client` | Default role. Shows dynamic QR, views own stamps and cards. |
+| `cashier` | Scans client QR codes to stamp loyalty cards. Assigned per-merchant via `merchant_staff`. |
+| `business` | Merchant owner. Has dashboard, manages staff, rewards, analytics. Also acts as cashier. |
+| `admin` | Platform admin. Manages merchants, users, platform-wide stats. |
 
-| Route | Page component | Auth |
-|-------|---------------|------|
-| `home` | Home.svelte | No |
-| `login` | Login.svelte | No |
-| `register` | Register.svelte | No |
-| `forgot-password` | ForgotPassword.svelte | No |
-| `about` | About.svelte | No |
-| `settings` | Settings.svelte | Yes |
-| `admin` | admin/Dashboard.svelte | Admin |
-| `oauth-callback` | OAuthCallback.svelte | No |
-| `not-found` | NotFound.svelte | No |
+## Domain Model
 
-Route rendering is in App.svelte with conditional blocks (`{#if getRoute() === 'home'}`). Navigation via `navigate(route, params)`. `admin` accepts a `section` param (`overview`, `users`, `rate-limits`).
+| Table | Purpose |
+|-------|---------|
+| `merchants` | Business profiles (owner, name, slug, stamps_per_reward, plan_tier, monthly_point_cap, points_used_month, secret_hmac_key) |
+| `merchant_staff` | Links users to merchants (role: owner/cashier). Unique on (merchant_id, user_id) |
+| `customer_cards` | Per-customer stamp balance per merchant. Unique on (customer_id, merchant_id) |
+| `rewards` | Available rewards catalog per merchant |
+| `stamp_transactions` | Audit log: EARN_STAMP / REDEEM_REWARD transactions |
+| `used_qr_signatures` | Anti-replay lock. Prevents QR code reuse. |
 
-### API Client (`lib/api.ts`)
+## TOTP Dynamic QR Flow
 
-Lightweight fetch wrapper:
-- `api.get<T>(path)`, `api.post<T>(path, body?)`, `api.patch<T>(path, body)`, `api.put<T>(path, body)`, `api.delete<T>(path)`
-- Base URL from `import.meta.env.VITE_API_URL` (defaults to `''`)
-- Auth: session cookie (`credentials: 'include'`) set by Better Auth on sign-in; the API client never sends an Authorization header
-- GET cache: 15-second TTL in a Map; mutations clear the cache
-- 401 response clears session via `clearSession()`
-- Errors thrown as `ApiRequestError` (`.message`, `.status`, `.code`)
-- 10-second AbortController timeout on all requests
-
-### Auth Store (`stores/auth.svelte.ts`)
-
-Key functions: `checkSession()`, `login()`, `register()`, `logout()`, `socialLogin()`, `resolveOAuthSession()`, `hasRole(role)`, `isAuthenticated()`, `isLoading()`, `getUser()`, plus OTP helpers (`sendVerificationOtp`, `verifyEmailOtp`, `sendResetOtp`, `resetPassword`).
-
-### Conventions
-
-- Svelte 5 runes: `$state()`, `$derived()`, `$effect()`
-- `.svelte.ts` extension for reactive stores
-- Tailwind CSS v4 utility classes (`bg-surface-container`, `text-on-surface-variant`, etc.)
-- @lucide/svelte for icons
-- i18n: `stores/i18n.svelte.ts` — no, `lib/i18n.svelte.ts` with translations in EN/FR/AR
-- Toast notifications via `stores/toast.svelte.ts` + `components/Toast.svelte`; usage: `showToast('success'|'error', message)`
+1. **Client registers** → `auth_users.totp_secret` auto-generated (Base32, 20 bytes)
+2. **Client calls** `GET /api/client/qr/current` → server computes TOTP (RFC 6238, HMAC-SHA1, 6 digits, 30s)
+3. **Client displays QR** containing `{ v:1, u:userId, t:totp, ts:timestamp }`
+4. **Cashier scans** QR → sends payload to `POST /api/cashier/stamp`
+5. **Server verifies**: TOTP validity → anti-replay check → point cap → creates stamp transaction
 
 ## Backend Architecture
 
 ### Routes (`routes/`)
 
-| File | Prefix | Auth |
-|------|--------|------|
-| `otp.ts` | `/api/auth/otp/*` | None |
-| `me.ts` | `/api/me` | Required |
-| `admin.ts` | `/api/admin` | admin only |
+| File | Prefix | Auth | Description |
+|------|--------|------|-------------|
+| `otp.ts` | `/api/auth/otp/*` | None | Email verification + password reset OTPs |
+| `me.ts` | `/api/me` | Required | Profile GET/PATCH |
+| `client.ts` | `/api/client` | client+ | QR provision, current QR, cards, transactions, rewards |
+| `cashier.ts` | `/api/cashier` | cashier+ | Stamp card, merchant info, recent stamps, redeem reward |
+| `business.ts` | `/api/business` | business | Dashboard, staff CRUD, customers, transactions, rewards CRUD, settings |
+| `admin.ts` | `/api/admin` | admin | Stats, users CRUD, merchants CRUD, merchant staff/stats, rate limits |
 
-Auth routes (`/api/auth/*`) handled by Better Auth automatically. The static `/health` endpoint reports DB connectivity (Worker mode).
+### Services (`services/`)
 
-### Rate Limiting (middleware/rateLimit.ts)
+| File | Description |
+|------|-------------|
+| `otp.ts` | OTP generation, Resend email sending, verification |
+| `totp.ts` | RFC 6238 TOTP (generate secret, generate/verify code, build/parse QR payload, anti-replay signature) |
+| `stamp.ts` | Stamp card (verify TOTP, anti-replay, point cap, create transaction, update card) |
+| `analytics.ts` | Business dashboard stats, customer lists, transaction history |
 
-Groups per IP/reason, window 15 min unless noted:
+### Middleware
 
-| Group | Limit | Paths |
-|-------|-------|-------|
-| `otp-send` | 3 / 15 min | otp send endpoints |
-| `otp-verify` | 5 / 15 min | otp verify endpoints |
-| `auth` | 10 / 15 min | `/api/auth/*` |
-| `api` | 100 / 15 min | everything else under `/api` |
+| File | Description |
+|------|-------------|
+| `auth.ts` | `sessionMiddleware` (extract session from cookie) + `requireAuth()` |
+| `requireRole.ts` | Role-based access control. `requireRole('admin')`, `requireRole('cashier', 'business')` |
+| `rateLimit.ts` | IP-based rate limiter (DB-backed, 15-min windows) |
+| `securityHeaders.ts` | CSP, HSTS, X-Frame-Options, etc. |
+
+### Rate Limiting
+
+| Group | Limit | Window |
+|-------|-------|--------|
+| `otp-send` | 3 | 15 min |
+| `otp-verify` | 5 | 15 min |
+| `auth` | 10 | 15 min |
+| `api` | 100 | 15 min |
 
 ### Key Backend Files
 
-- **Auth** (`auth.ts`): Better Auth with drizzle adapter, email+password (SHA-256 + salt), Google/Facebook OAuth, `apiKey` plugin, session role field. Database hooks: `user.create.after` creates the profile row in the `user` table; `session.create.before` stamps `role` from the profile.
-- **Schema** (`db/schema.ts`): Better Auth tables (`authUsers`, `session`, `account`, `verification`, `jwks`, `apikey`) + app tables (`user`, `rateLimitLog`).
-- **OTP** (`services/otp.ts`, `routes/otp.ts`): email verification and password reset codes via Resend, stored in the `verification` table with 15-min expiry.
-- **Seed** (`db/seed.ts`): creates `admin@example.com` / `password123`.
+- **Auth** (`auth.ts`): Better Auth with drizzle adapter, SHA-256+salt passwords, Google/Facebook OAuth, session role stamping. Database hooks: `user.create.after` generates TOTP secret + creates profile; `session.create.before` stamps role from profile.
+- **Schema** (`db/schema.ts`): Better Auth tables + loyalty platform tables (`merchants`, `merchantStaff`, `customerCards`, `rewards`, `stampTransactions`, `usedQrSignatures`)
+- **TOTP** (`services/totp.ts`): RFC 6238 compliant. HMAC-SHA1, 6 digits, 30s period, ±1 window tolerance. Uses Web Crypto API (Workers-compatible).
+- **Stamp** (`services/stamp.ts`): Full stamp flow — QR parse → TOTP verify → anti-replay → point cap check → transaction create → card update.
 
 ### Environment Variables
 
@@ -134,25 +132,13 @@ Groups per IP/reason, window 15 min unless noted:
 | `PORT` | 8787 |
 | `FRONTEND_URL` | used for CORS and redirect URLs |
 
-## Database Schema (Drizzle ORM, SQLite/Turso)
-
-### Better Auth Tables (managed by Better Auth)
-`auth_users`, `session`, `account`, `verification`, `jwks`, `apikey`
-
-### App Tables
-
-| Table | Key Columns |
-|-------|------------|
-| `user` | `id` (FK → auth_users), `role` (user/admin), `firstName`, `lastName`, `email`, `address`, `locale` |
-| `rate_limit_log` | `id`, `ipAddress`, `reason`, `triggeredAt`, `isResolved` |
-
-## API Reference (Key Endpoints)
+## API Reference
 
 ### Auth (Better Auth)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/auth/sign-up/email` | Register `{ email, password, name }` |
+| POST | `/api/auth/sign-up/email` | Register `{ email, password, name }` — creates client + TOTP secret |
 | POST | `/api/auth/sign-in/email` | Login `{ email, password }` |
 | POST | `/api/auth/sign-out` | Logout |
 | GET | `/api/auth/session` | Current session |
@@ -167,23 +153,67 @@ Groups per IP/reason, window 15 min unless noted:
 | POST | `/api/auth/otp/send-reset` | Send password reset code |
 | POST | `/api/auth/otp/reset-password` | Reset password with code |
 
-### Me (auth required)
+### Client
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/client/qr/provision` | Generate TOTP secret + return QR data URI |
+| GET | `/api/client/qr/current` | Current TOTP + QR (refreshes every 30s) |
+| GET | `/api/client/cards` | List all merchant cards with stamp balances |
+| GET | `/api/client/cards/:merchantId` | Single card detail + stamp history |
+| GET | `/api/client/transactions` | All stamp transactions |
+| GET | `/api/client/rewards/available` | List redeemable rewards |
+
+### Cashier
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/cashier/stamp` | Verify QR + stamp card `{ qrPayload, stampsCount? }` |
+| GET | `/api/cashier/merchant` | Own merchant info |
+| GET | `/api/cashier/stamps` | Recent stamps by this cashier |
+| POST | `/api/cashier/redeem` | Redeem reward `{ customerId, rewardId }` |
+
+### Business
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/business/dashboard` | Analytics: stamps, customers, revenue, points usage |
+| GET | `/api/business/staff` | List staff |
+| POST | `/api/business/staff` | Add staff `{ email, role? }` |
+| DELETE | `/api/business/staff/:userId` | Remove staff |
+| PATCH | `/api/business/staff/:userId` | Update staff role |
+| GET | `/api/business/customers` | List customers with balances |
+| GET | `/api/business/transactions` | All transactions (paginated) |
+| GET | `/api/business/rewards` | List rewards |
+| POST | `/api/business/rewards` | Create reward |
+| PATCH | `/api/business/rewards/:id` | Update reward |
+| DELETE | `/api/business/rewards/:id` | Delete reward |
+| PATCH | `/api/business/settings` | Update merchant settings |
+
+### Profile
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/me` | Profile |
 | PATCH | `/api/me` | Update profile `{ firstName, lastName, address, locale }` |
 
-### Admin (admin only)
+### Admin
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/admin/stats` | Users / admins / new-in-24h / rate-limited-24h |
-| GET | `/api/admin/users` | List users (max 500) |
-| GET | `/api/admin/users/:id` | Single user |
-| PATCH | `/api/admin/users/:id` | Update role / profile |
+| GET | `/api/admin/stats` | Platform-wide stats |
+| GET | `/api/admin/users` | List users |
+| GET | `/api/admin/users/:id` | Get user |
+| PATCH | `/api/admin/users/:id` | Update user |
 | DELETE | `/api/admin/users/:id` | Delete user |
 | GET | `/api/admin/rate-limits` | Recent rate-limit hits |
+| GET | `/api/admin/merchants` | List all merchants |
+| POST | `/api/admin/merchants` | Create merchant + assign owner |
+| GET | `/api/admin/merchants/:id` | Get merchant |
+| PATCH | `/api/admin/merchants/:id` | Update merchant |
+| DELETE | `/api/admin/merchants/:id` | Soft-delete merchant |
+| GET | `/api/admin/merchants/:id/staff` | List merchant staff |
+| GET | `/api/admin/merchants/:id/stats` | Merchant analytics |
 
 ### Other
 
@@ -197,9 +227,10 @@ Groups per IP/reason, window 15 min unless noted:
 - TypeScript throughout (backend and frontend)
 - Svelte 5 runes: `$state()`, `$derived()`, `$effect()`
 - Drizzle ORM for all DB queries
-- Role-based auth: `requireRole('admin')` middleware
+- Role-based auth: `requireRole('admin')`, `requireRole('cashier', 'business')` middleware
 - Tailwind CSS v4 for all styling
 - i18n via `lib/i18n.svelte.ts` + `t()` function in templates
 - Imports: `import X from './X.svelte'` — no barrel files
 - File naming: PascalCase for components, camelCase for utilities/stores
 - `.svelte.ts` extension for reactive store modules
+- Zod validation on all mutation endpoints

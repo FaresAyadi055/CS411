@@ -1,10 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Eye, EyeOff, ArrowLeft, Check, X } from '@lucide/svelte'
+  import { Eye, EyeOff, Check, X } from '@lucide/svelte'
   import { t } from '../lib/i18n.svelte'
   import { navigate } from '../stores/router.svelte'
-  import { getAuthErrorFromUrl, clearAuthErrorFromUrl, register, sendVerificationOtp, verifyEmailOtp } from '../stores/auth.svelte'
+  import { api } from '../lib/api'
+  import { getAuthErrorFromUrl, clearAuthErrorFromUrl, register, login, checkSession, getUser, hasRole, socialLoginRedirect, getReferral } from '../stores/auth.svelte'
   import SocialLoginButtons from '../components/SocialLoginButtons.svelte'
+
+  type ReferralPreview = { name: string; logoUrl: string | null }
+  let referral = $state<ReferralPreview | null>(null)
 
   let name = $state('')
   let email = $state('')
@@ -13,15 +17,7 @@
   let consent = $state(false)
   let error = $state('')
   let loading = $state(false)
-  let success = $state(false)
   let touched = $state(false)
-
-  let otpStep = $state(false)
-  let otpCode = $state('')
-  let otpSending = $state(false)
-  let otpSent = $state(false)
-  let otpCooldown = $state(0)
-  let otpCooldownTimer: ReturnType<typeof setInterval> | undefined
 
   const requirements = $derived([
     { key: 'length', met: password.length >= 8 },
@@ -55,64 +51,13 @@
     loading = true
     try {
       await register(email, password, name)
-      otpStep = true
-      await handleSendOtp()
+      await login(email, password)
+      socialLoginRedirect()
     } catch (e) {
       error = (e as Error).message
     } finally {
       loading = false
     }
-  }
-
-  async function handleSendOtp() {
-    error = ''
-    otpSending = true
-    try {
-      await sendVerificationOtp(email)
-      otpSent = true
-      otpCooldown = 60
-      if (otpCooldownTimer) clearInterval(otpCooldownTimer)
-      otpCooldownTimer = setInterval(() => {
-        otpCooldown--
-        if (otpCooldown <= 0) {
-          clearInterval(otpCooldownTimer)
-          otpCooldownTimer = undefined
-        }
-      }, 1000)
-    } catch (e) {
-      error = (e as Error).message
-    } finally {
-      otpSending = false
-    }
-  }
-
-  async function handleVerifyOtp() {
-    if (otpCode.length !== 6) {
-      error = 'Please enter the 6-digit code'
-      return
-    }
-    error = ''
-    loading = true
-    try {
-      await verifyEmailOtp(email, otpCode)
-      success = true
-      setTimeout(() => navigate('login'), 2000)
-    } catch (e) {
-      error = (e as Error).message
-    } finally {
-      loading = false
-    }
-  }
-
-  function backToForm() {
-    otpStep = false
-    otpCode = ''
-    error = ''
-  }
-
-  function handleOtpInput(e: Event) {
-    const target = e.target as HTMLInputElement
-    otpCode = target.value.replace(/\D/g, '').slice(0, 6)
   }
 
   onMount(() => {
@@ -121,8 +66,14 @@
       error = authError
       clearAuthErrorFromUrl()
     }
-    return () => {
-      if (otpCooldownTimer) clearInterval(otpCooldownTimer)
+    const ref = getReferral()
+    if (ref) {
+      api
+        .getPublic<{ merchant: ReferralPreview }>(`/api/public/merchant/${encodeURIComponent(ref)}`)
+        .then((res) => {
+          if (res.merchant) referral = res.merchant
+        })
+        .catch(() => {})
     }
   })
 </script>
@@ -134,56 +85,17 @@
       <p class="text-on-surface-variant text-sm mt-1">{t('app.tagline')}</p>
     </div>
 
+    {#if referral}
+      <div class="card p-3 mb-4 flex items-center gap-3">
+        {#if referral.logoUrl}
+          <img src={referral.logoUrl} alt="" class="w-10 h-10 rounded-lg object-cover shrink-0" />
+        {/if}
+        <p class="text-sm text-on-surface-variant">{t('referral.join', { name: referral.name })}</p>
+      </div>
+    {/if}
+
     <div class="card p-6">
-      {#if otpStep}
-        <button onclick={backToForm} class="flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface mb-4">
-          <ArrowLeft size={16} />
-          Back
-        </button>
-        <h2 class="text-lg font-bold tracking-tight mb-1">Verify your email</h2>
-        <p class="text-sm text-on-surface-variant mb-4">Enter the 6-digit code sent to {email}</p>
-
-        {#if error}
-          <div class="bg-lost-bg text-lost-text text-sm p-3 rounded-lg mb-3">{error}</div>
-        {/if}
-        {#if success}
-          <div class="bg-found-bg text-found-text text-sm p-3 rounded-lg mb-3">Account created! Redirecting to login...</div>
-        {/if}
-
-        <form onsubmit={(e) => { e.preventDefault(); handleVerifyOtp() }} class="space-y-3">
-          <input
-            value={otpCode}
-            oninput={handleOtpInput}
-            type="text"
-            inputmode="numeric"
-            pattern="[0-9]*"
-            placeholder="000000"
-            maxlength={6}
-            autocomplete="one-time-code"
-            required
-            disabled={success}
-            class="w-full h-14 text-center text-2xl font-mono tracking-[0.3em] input-field disabled:opacity-50"
-          />
-          <button
-            type="submit"
-            disabled={loading || otpCode.length !== 6 || success}
-            class="btn btn-primary w-full"
-          >
-            {loading ? t('common.loading') : 'Verify email'}
-          </button>
-        </form>
-
-        <div class="text-center mt-4">
-          {#if otpCooldown > 0}
-            <p class="text-xs text-on-surface-variant">Resend code in {otpCooldown}s</p>
-          {:else}
-            <button onclick={handleSendOtp} disabled={otpSending} class="text-sm text-primary font-semibold hover:underline disabled:opacity-50">
-              {otpSending ? 'Sending...' : 'Resend code'}
-            </button>
-          {/if}
-        </div>
-      {:else}
-        <h2 class="text-lg font-bold tracking-tight mb-4">{t('auth.sign.up')}</h2>
+      <h2 class="text-lg font-bold tracking-tight mb-4">{t('auth.sign.up')}</h2>
 
         {#if error}
           <div class="bg-lost-bg text-lost-text text-sm p-3 rounded-lg mb-3">{error}</div>
@@ -299,7 +211,6 @@
           {t('auth.has.account')}
           <button onclick={() => navigate('login')} class="text-primary font-semibold">{t('auth.sign.in')}</button>
         </p>
-      {/if}
     </div>
   </div>
 </main>

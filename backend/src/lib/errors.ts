@@ -9,5 +9,6 @@ export class AppError extends Error {
 }
 
 export function jsonError(status: number, message: string, code?: string) {
-  return { error: message, code: code ?? 'ERROR' }
+  const err = new AppError(status, message, code)
+  return err
 }

@@ -22,15 +22,32 @@ const cache = new Map<string, { data: unknown; timestamp: number }>()
 const CACHE_TTL = 15_000
 const REQUEST_TIMEOUT_MS = 10_000
 
-function clearCache() {
-  cache.clear()
+function resourcePrefix(path: string): string {
+  const norm = path.startsWith('/') ? path : `/${path}`
+  return `/${norm.split('/').slice(1, 3).join('/')}`
+}
+
+function clearCache(prefix?: string) {
+  if (!prefix) {
+    cache.clear()
+    return
+  }
+  for (const key of cache.keys()) {
+    const k = BASE ? key.slice(BASE.length) : key
+    if (k.startsWith(prefix)) cache.delete(key)
+  }
 }
 
 let _onSessionExpired: (() => void) | null = null
+let _onRequestError: ((e: { message: string; status: number; code?: string }) => void) | null = null
 let _authed = true
 
 export function setOnSessionExpired(fn: () => void) {
   _onSessionExpired = fn
+}
+
+export function setOnRequestError(fn: (e: { message: string; status: number; code?: string }) => void) {
+  _onRequestError = fn
 }
 
 export function setApiAuthState(authed: boolean) {
@@ -56,14 +73,26 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   const creds: RequestCredentials = options.credentials ?? (_authed ? 'include' : 'omit')
-  const res = await apiFetch(path, { ...options, headers, credentials: creds })
+
+  let res: Response
+  try {
+    res = await apiFetch(path, { ...options, headers, credentials: creds })
+  } catch {
+    const msg = 'Network error'
+    _onRequestError?.({ message: msg, status: 0 })
+    throw new ApiRequestError(msg, 0)
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     const msg = (body.message as string) || (body.error as string) || res.statusText
 
+    console.error('[API]', res.status, path, body)
+
     if (res.status === 401) {
       clearSession()
+    } else {
+      _onRequestError?.({ message: msg, status: res.status, code: body.code as string })
     }
 
     throw new ApiRequestError(msg, res.status, body.code as string)
@@ -74,7 +103,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (isGet) {
     cache.set(key, { data, timestamp: Date.now() })
   } else {
-    clearCache()
+    clearCache(resourcePrefix(path))
   }
 
   return data
@@ -117,8 +146,8 @@ export const api = {
   },
 }
 
-export function invalidateCache() {
-  clearCache()
+export function invalidateCache(prefix?: string) {
+  clearCache(prefix)
 }
 
 export default api

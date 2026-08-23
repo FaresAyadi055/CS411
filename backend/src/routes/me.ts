@@ -23,6 +23,7 @@ const patchProfileSchema = z.object({
   lastName: z.string().optional(),
   address: z.string().nullable().optional(),
   locale: z.enum(['en', 'fr', 'ar']).optional(),
+  notificationsEnabled: z.boolean().optional(),
 })
 
 meRoutes.patch('/', zValidator('json', patchProfileSchema), async (c) => {

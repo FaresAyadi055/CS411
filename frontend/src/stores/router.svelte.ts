@@ -8,10 +8,25 @@ export type Route =
   | 'admin'
   | 'oauth-callback'
   | 'not-found'
+  | 'qr'
+  | 'cards'
+  | 'card'
+  | 'scan'
+  | 'dashboard'
+  | 'staff'
+  | 'rewards'
+  | 'business-profile'
+  | 'partners'
+  | 'transactions'
+  | 'notifications'
 
-const NAMED_ROUTES: Route[] = ['home', 'login', 'register', 'forgot-password', 'about', 'settings', 'oauth-callback']
+const NAMED_ROUTES: Route[] = [
+  'home', 'login', 'register', 'forgot-password', 'about',
+  'settings', 'oauth-callback', 'qr', 'cards', 'scan',
+  'dashboard', 'staff', 'rewards', 'business-profile', 'partners', 'transactions', 'notifications',
+]
 
-const PREFIX_ROUTES = ['admin']
+const PREFIX_ROUTES = ['admin', 'card']
 
 let currentRoute = $state<Route>('home')
 let routeParams = $state<Record<string, string>>({})
@@ -26,6 +41,10 @@ function parseLocation(): { route: Route; params: Record<string, string> } {
 
   if (base === 'admin') {
     return { route: 'admin', params: { section: parts[1] || 'overview' } }
+  }
+
+  if (base === 'card') {
+    return { route: 'card', params: { merchantId: parts[1] || '' } }
   }
 
   if (NAMED_ROUTES.includes(base as Route)) {
@@ -81,6 +100,7 @@ export function navigate(route: Route, params: Record<string, string> = {}) {
   }
   let hash: string = route
   if (route === 'admin' && params.section) hash = `admin/${params.section}`
+  if (route === 'card' && params.merchantId) hash = `card/${params.merchantId}`
 
   if (window.location.pathname !== '/') {
     window.history.pushState(null, '', '/#' + hash)

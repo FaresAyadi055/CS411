@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "Fidelito",
+  "short_name": "Fidelito",
+  "description": "Digital loyalty cards for Tunisian businesses",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "browser"],
+  "background_color": "#faf8ff",
+  "theme_color": "#006948",
+  "orientation": "portrait",
+  "categories": ["business", "shopping", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

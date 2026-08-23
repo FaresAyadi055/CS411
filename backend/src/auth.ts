@@ -7,6 +7,7 @@ import { db } from './db'
 import { authSchema, user } from './db/schema'
 import { env } from './config/env'
 import { hashPassword, verifyPassword } from './lib/auth-password'
+import { generateSecret } from './services/totp'
 
 let _auth: ReturnType<typeof betterAuth> = null as unknown as ReturnType<typeof betterAuth>
 
@@ -78,7 +79,7 @@ export function getAuth(): ReturnType<typeof betterAuth> {
       additionalFields: {
         role: {
           type: 'string',
-          defaultValue: 'user',
+          defaultValue: 'client',
           input: false,
         },
       },
@@ -87,33 +88,38 @@ export function getAuth(): ReturnType<typeof betterAuth> {
       user: {
         create: {
           after: async (authUser) => {
+            const totpSecret = generateSecret()
             await db
               .insert(user)
               .values({
                 id: authUser.id,
                 email: authUser.email,
-                role: 'user',
+                role: 'client',
                 firstName: authUser.name.split(' ')[0] ?? null,
                 lastName: authUser.name.split(' ').slice(1).join(' ') || null,
               })
               .onConflictDoNothing()
+            await db
+              .update(authSchema.user)
+              .set({ totpSecret })
+              .where(eq(authSchema.user.id, authUser.id))
           },
         },
       },
-      session: {
-        create: {
-          before: async (sessionData) => {
-            const [profile] = await db
-              .select({ role: user.role })
-              .from(user)
-              .where(eq(user.id, sessionData.userId))
-              .limit(1)
-            return {
-              data: { ...sessionData, role: profile?.role ?? 'user' },
-            }
-          },
+    session: {
+      create: {
+        before: async (sessionData) => {
+          const [profile] = await db
+            .select({ role: user.role })
+            .from(user)
+            .where(eq(user.id, sessionData.userId))
+            .limit(1)
+          return {
+            data: { ...sessionData, role: profile?.role ?? 'client' },
+          }
         },
       },
+    },
     },
   }) as unknown as ReturnType<typeof betterAuth>
 

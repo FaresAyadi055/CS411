@@ -50,6 +50,7 @@ export async function checkSession() {
     user = data.profile
     writeProfileCache(data.profile)
     setApiAuthState(true)
+    await applyReferral()
   } catch {
     user = null
     writeProfileCache(null)
@@ -57,6 +58,42 @@ export async function checkSession() {
   } finally {
     loading = false
   }
+}
+
+async function applyReferral() {
+  if (!user) return
+  const ref = getReferral()
+  if (!ref) return
+  const ok = await subscribeToMerchant(ref)
+  if (ok) setReferral(null)
+}
+
+export async function subscribeToMerchant(merchantRef: string): Promise<boolean> {
+  try {
+    await api.post('/api/client/subscribe', { merchantId: merchantRef })
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function getReferral(): string | null {
+  let ref = new URLSearchParams(window.location.search).get('ref')
+  if (!ref) {
+    const hash = window.location.hash
+    const q = hash.indexOf('?')
+    if (q !== -1) ref = new URLSearchParams(hash.slice(q + 1)).get('ref')
+  }
+  if (ref) {
+    localStorage.setItem('fidelito_referral', ref)
+    return ref
+  }
+  return localStorage.getItem('fidelito_referral')
+}
+
+export function setReferral(ref: string | null) {
+  if (ref) localStorage.setItem('fidelito_referral', ref)
+  else localStorage.removeItem('fidelito_referral')
 }
 
 async function authFetch(path: string, body: unknown) {
@@ -169,7 +206,15 @@ export function socialLoginRedirect() {
       navigate('admin', { section: 'overview' })
       return
     }
-    navigate('home')
+    if (user.role === 'business') {
+      navigate('dashboard')
+      return
+    }
+    if (user.role === 'cashier') {
+      navigate('scan')
+      return
+    }
+    navigate('qr')
   }
 }
 
