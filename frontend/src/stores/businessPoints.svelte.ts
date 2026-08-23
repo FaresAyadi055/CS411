@@ -14,6 +14,6 @@ export function setBusinessPoints(n: number | null) {
 export async function refreshBusinessPoints() {
   try {
     const d = await api.get<{ merchant: Merchant }>('/api/cashier/merchant')
-    businessPoints = Math.max(0, d.merchant.monthlyPointCap - d.merchant.pointsUsedMonth)
+    businessPoints = Math.max(0, d.merchant.pointsBalance)
   } catch {}
 }

@@ -114,8 +114,8 @@ const CREATE = [
     logo_url TEXT,
     stamps_per_reward INTEGER NOT NULL DEFAULT 10,
     plan_tier TEXT NOT NULL DEFAULT 'starter',
-    monthly_point_cap INTEGER NOT NULL DEFAULT 300,
-    points_used_month INTEGER NOT NULL DEFAULT 0,
+    points_balance INTEGER NOT NULL DEFAULT 0,
+    points_funded INTEGER NOT NULL DEFAULT 0,
     secret_hmac_key TEXT NOT NULL,
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at INTEGER NOT NULL,
@@ -229,6 +229,8 @@ const ALTERS = [
   `ALTER TABLE auth_users ADD COLUMN totp_secret TEXT`,
   `ALTER TABLE "user" ADD COLUMN notifications_enabled INTEGER NOT NULL DEFAULT 1`,
   `ALTER TABLE "user" ADD COLUMN phone TEXT`,
+  `ALTER TABLE merchants RENAME COLUMN monthly_point_cap TO points_balance`,
+  `ALTER TABLE merchants RENAME COLUMN points_used_month TO points_funded`,
 ]
 
 async function main() {

@@ -21,10 +21,9 @@
 
   let merchant = $state<Merchant | null>(null)
   let loading = $state(true)
-  let saving = $state(false)
+  let savingField = $state('')
   let name = $state('')
   let stampsPerReward = $state(10)
-  let monthlyPointCap = $state(300)
   let logoUrl = $state('')
   let lat = $state<number | null>(null)
   let lng = $state<number | null>(null)
@@ -43,7 +42,6 @@
         merchant = data.merchant
         name = data.merchant.name
         stampsPerReward = data.merchant.stampsPerReward
-        monthlyPointCap = data.merchant.monthlyPointCap
         logoUrl = data.merchant.logoUrl || ''
         lat = data.merchant.lat || null
         lng = data.merchant.lng || null
@@ -102,23 +100,16 @@
     setTimeout(() => map?.invalidateSize(), 200)
   }
 
-  async function save() {
-    saving = true
+  async function saveField(field: string, patch: Record<string, unknown>) {
+    savingField = field
     try {
-      await api.patch('/api/business/settings', {
-        name: name.trim(),
-        stampsPerReward,
-        monthlyPointCap,
-        logoUrl: logoUrl || null,
-        lat,
-        lng,
-        address: address.trim() || null,
-      })
+      const data = await api.patch<{ merchant: Merchant }>('/api/business/settings', patch)
+      merchant = data.merchant
       showToast('success', t('common.saved'))
     } catch (e: any) {
       showToast('error', e.message || 'Failed to save')
     } finally {
-      saving = false
+      savingField = ''
     }
   }
 
@@ -319,20 +310,43 @@
             {uploading ? t('common.loading') : t('business.settings.upload_logo')}
           </button>
         {/if}
+        <button
+          onclick={() => saveField('logo', { logoUrl: logoUrl || null })}
+          disabled={savingField === 'logo'}
+          class="btn btn-secondary mt-2"
+        >
+          <Save size={16} class="mr-2" />{savingField === 'logo' ? t('common.saving') : t('common.save')}
+        </button>
       </div>
 
       <div>
         <label class="field-label" for="biz-name">{t('business.settings.name')}</label>
         <input id="biz-name" bind:value={name} type="text" class="input-field" />
+        <button
+          onclick={() => saveField('name', { name: name.trim() })}
+          disabled={savingField === 'name' || !name.trim()}
+          class="btn btn-secondary w-full mt-2"
+        >
+          <Save size={16} class="mr-2" />{savingField === 'name' ? t('common.saving') : t('common.save')}
+        </button>
       </div>
       <div>
         <label class="field-label" for="biz-spr">{t('business.settings.stamps_per_reward')}</label>
         <input id="biz-spr" bind:value={stampsPerReward} type="number" min="1" class="input-field" />
+        <button
+          onclick={() => saveField('spr', { stampsPerReward })}
+          disabled={savingField === 'spr'}
+          class="btn btn-secondary w-full mt-2"
+        >
+          <Save size={16} class="mr-2" />{savingField === 'spr' ? t('common.saving') : t('common.save')}
+        </button>
       </div>
-      <div>
-        <label class="field-label" for="biz-cap">{t('business.settings.monthly_cap')}</label>
-        <input id="biz-cap" bind:value={monthlyPointCap} type="number" min="1" class="input-field" />
-        <p class="text-xs text-on-surface-variant mt-1">Current usage: {merchant.pointsUsedMonth} / {merchant.monthlyPointCap}</p>
+      <div class="card p-4 bg-surface-container-low">
+        <p class="field-label">{t('business.settings.points_funded_title')}</p>
+        <p class="text-2xl font-bold text-primary mt-1">{merchant.pointsBalance.toLocaleString()}</p>
+        <p class="text-xs text-on-surface-variant mt-1">
+          {t('business.settings.points_funded_desc', { funded: merchant.pointsFunded.toLocaleString() })}
+        </p>
       </div>
 
       <div class="space-y-2">
@@ -371,13 +385,14 @@
           <button type="button" onclick={useMyLocation} class="btn btn-secondary w-full mt-2">
             <LocateFixed size={16} class="mr-2" />{t('business.settings.use_location')}
           </button>
+          <button
+            onclick={() => saveField('location', { lat, lng, address: address.trim() || null })}
+            disabled={savingField === 'location'}
+            class="btn btn-secondary w-full mt-2"
+          >
+            <Save size={16} class="mr-2" />{savingField === 'location' ? t('common.saving') : t('common.save')}
+          </button>
         </div>
-
-
-      <button onclick={save} disabled={saving || !name.trim()} class="btn btn-primary w-full">
-        <Save size={18} class="mr-2" />
-        {saving ? t('common.saving') : t('common.save')}
-      </button>
     </div>
 
     <div class="card p-4 space-y-3 mt-4 animate-slide-up">

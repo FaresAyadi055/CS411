@@ -33,6 +33,7 @@ export interface AdjustResult {
   lifetimePoints: number
   mealVoucherTotal: number
   transactionId: string
+  lowBalance?: boolean
 }
 
 async function resolveCashierMerchant(cashierId: string) {
@@ -41,8 +42,7 @@ async function resolveCashierMerchant(cashierId: string) {
       merchantId: merchantStaff.merchantId,
       merchantName: merchants.name,
       isActive: merchants.isActive,
-      monthlyPointCap: merchants.monthlyPointCap,
-      pointsUsedMonth: merchants.pointsUsedMonth,
+      pointsBalance: merchants.pointsBalance,
     })
     .from(merchantStaff)
     .innerJoin(merchants, eq(merchantStaff.merchantId, merchants.id))
@@ -59,8 +59,7 @@ async function resolveCashierMerchant(cashierId: string) {
   return {
     merchantId: row.merchantId,
     merchantName: row.merchantName,
-    monthlyPointCap: row.monthlyPointCap,
-    pointsUsedMonth: row.pointsUsedMonth,
+    pointsBalance: row.pointsBalance,
   }
 }
 
@@ -180,7 +179,7 @@ export async function adjustBalance(
   amount: number,
   rewardId?: string | null,
 ): Promise<AdjustResult> {
-  const { merchantId, merchantName, monthlyPointCap } = await resolveCashierMerchant(cashierId)
+  const { merchantId, merchantName, pointsBalance } = await resolveCashierMerchant(cashierId)
 
   if (amount === 0) {
     throw jsonError(400, 'Amount cannot be zero', 'INVALID_AMOUNT')
@@ -193,25 +192,23 @@ export async function adjustBalance(
 
   const now = new Date()
 
+  // There is no hard cap anymore: giving a customer points simply draws down the
+  // business's admin-funded balance. We surface a warning when it runs dry.
+  const startingBalance = pointsBalance ?? 0
+  const newBalance = Math.max(0, startingBalance - (balanceType === 'fidelity' && !isRemove ? absAmount : 0))
+  const lowBalance = newBalance <= 0
+
   // Wrap every write in a single transaction so a crash between statements can't leave a
   // balance out of sync with the stamp_transactions audit log.
   return await db.transaction(async (tx) => {
     if (balanceType === 'fidelity' && !isRemove) {
-      const capUpd = await tx
+      await tx
         .update(merchants)
         .set({
-          pointsUsedMonth: sql`${merchants.pointsUsedMonth} + ${absAmount}`,
+          pointsBalance: newBalance,
           updatedAt: now,
         })
-        .where(
-          and(
-            eq(merchants.id, merchantId),
-            sql`${merchants.pointsUsedMonth} + ${absAmount} <= ${monthlyPointCap}`,
-          ),
-        )
-      if (capUpd.rowsAffected === 0) {
-        throw jsonError(403, 'Monthly point cap reached', 'POINT_CAP_REACHED')
-      }
+        .where(eq(merchants.id, merchantId))
     }
 
     const balUpd = await tx
@@ -270,6 +267,104 @@ export async function adjustBalance(
       lifetimePoints: card.lifetimePoints + (balanceType === 'fidelity' && amount > 0 ? amount : 0),
       mealVoucherTotal: card.mealVoucherTotal + (balanceType === 'meal_voucher' && amount > 0 ? amount : 0),
       transactionId,
+    }
+  })
+}
+
+export async function adminAdjustBalance(
+  actorId: string,
+  merchantId: string,
+  customerId: string,
+  balanceType: 'fidelity' | 'meal_voucher',
+  amount: number,
+): Promise<AdjustResult> {
+  const [merchant] = await db
+    .select({ id: merchants.id, name: merchants.name, pointsBalance: merchants.pointsBalance })
+    .from(merchants)
+    .where(eq(merchants.id, merchantId))
+    .limit(1)
+  if (!merchant) throw jsonError(404, 'Merchant not found', 'MERCHANT_NOT_FOUND')
+
+  if (amount === 0) throw jsonError(400, 'Amount cannot be zero', 'INVALID_AMOUNT')
+  const isRemove = amount < 0
+  const absAmount = Math.abs(amount)
+
+  const card = await getOrCreateCard(customerId, merchantId)
+
+  await db
+    .insert(merchantSubscriptions)
+    .values({ id: crypto.randomUUID(), userId: customerId, merchantId, createdAt: new Date() })
+    .onConflictDoNothing()
+
+  const now = new Date()
+  const startingBalance = merchant.pointsBalance ?? 0
+  const newBalance = Math.max(0, startingBalance - (balanceType === 'fidelity' && !isRemove ? absAmount : 0))
+  const lowBalance = newBalance <= 0
+  return await db.transaction(async (tx) => {
+    if (balanceType === 'fidelity' && !isRemove) {
+      await tx
+        .update(merchants)
+        .set({ pointsBalance: newBalance, updatedAt: now })
+        .where(eq(merchants.id, merchantId))
+    }
+
+    const balUpd = await tx
+      .update(customerCards)
+      .set(
+        balanceType === 'fidelity'
+          ? {
+              fidelityPoints: sql`${customerCards.fidelityPoints} + ${amount}`,
+              lifetimePoints: sql`${customerCards.lifetimePoints} + ${amount > 0 ? amount : 0}`,
+              lastVisitAt: now,
+              updatedAt: now,
+            }
+          : {
+              mealVoucherBalance: sql`${customerCards.mealVoucherBalance} + ${amount}`,
+              mealVoucherTotal: sql`${customerCards.mealVoucherTotal} + ${amount > 0 ? amount : 0}`,
+              lastVisitAt: now,
+              updatedAt: now,
+            },
+      )
+      .where(
+        isRemove
+          ? and(
+              eq(customerCards.id, card.id),
+              sql`${
+                balanceType === 'fidelity'
+                  ? customerCards.fidelityPoints
+                  : customerCards.mealVoucherBalance
+              } >= ${absAmount}`,
+            )
+          : eq(customerCards.id, card.id),
+      )
+    if (balUpd.rowsAffected === 0) {
+      throw balanceType === 'fidelity'
+        ? jsonError(400, 'Insufficient fidelity points', 'INSUFFICIENT_POINTS')
+        : jsonError(400, 'Insufficient meal voucher balance', 'INSUFFICIENT_MEAL_VOUCHER')
+    }
+
+    const transactionId = await recordTransaction(
+      tx,
+      merchantId,
+      merchant.name,
+      customerId,
+      actorId,
+      balanceType,
+      isRemove,
+      absAmount,
+      null,
+      now,
+    )
+
+    return {
+      customerId,
+      merchantId,
+      fidelityPoints: card.fidelityPoints + (balanceType === 'fidelity' ? amount : 0),
+      mealVoucherBalance: card.mealVoucherBalance + (balanceType === 'meal_voucher' ? amount : 0),
+      lifetimePoints: card.lifetimePoints + (balanceType === 'fidelity' && amount > 0 ? amount : 0),
+      mealVoucherTotal: card.mealVoucherTotal + (balanceType === 'meal_voucher' && amount > 0 ? amount : 0),
+      transactionId,
+      lowBalance,
     }
   })
 }

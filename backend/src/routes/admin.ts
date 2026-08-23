@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { eq, desc, gte, sql, or } from 'drizzle-orm'
+import { eq, desc, gte, sql, or, and } from 'drizzle-orm'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { db } from '../db'
@@ -17,7 +17,8 @@ import {
 import { requireAuth } from '../middleware/auth'
 import { requireRole } from '../middleware/requireRole'
 import { generateSecret } from '../services/totp'
-import { getOrCreateCard } from '../services/stamp'
+import { getOrCreateCard, adminAdjustBalance } from '../services/stamp'
+import { AppError } from '../lib/errors'
 import type { AppVariables } from '../types/app'
 
 export const adminRoutes = new Hono<{ Variables: AppVariables }>()
@@ -135,7 +136,7 @@ const createMerchantSchema = z.object({
   ownerEmail: z.string().email(),
   stampsPerReward: z.number().int().positive().default(10),
   planTier: z.enum(['starter', 'growth', 'pro']).default('starter'),
-  monthlyPointCap: z.number().int().positive().default(300),
+  initialPoints: z.number().int().nonnegative().default(0),
 })
 
 adminRoutes.post('/merchants', zValidator('json', createMerchantSchema), async (c) => {
@@ -165,7 +166,8 @@ adminRoutes.post('/merchants', zValidator('json', createMerchantSchema), async (
     slug: body.slug,
     stampsPerReward: body.stampsPerReward,
     planTier: body.planTier,
-    monthlyPointCap: body.monthlyPointCap,
+    pointsBalance: body.initialPoints,
+    pointsFunded: body.initialPoints,
     secretHmacKey: hmacKey,
   })
 
@@ -197,7 +199,6 @@ const updateMerchantSchema = z.object({
   name: z.string().min(1).optional(),
   stampsPerReward: z.number().int().positive().optional(),
   planTier: z.enum(['starter', 'growth', 'pro']).optional(),
-  monthlyPointCap: z.number().int().positive().optional(),
   isActive: z.boolean().optional(),
 })
 
@@ -251,9 +252,135 @@ adminRoutes.get('/merchants/:id/stats', async (c) => {
     merchant: {
       id: merchant.id,
       name: merchant.name,
-      pointsUsedMonth: merchant.pointsUsedMonth,
-      monthlyPointCap: merchant.monthlyPointCap,
+      pointsBalance: merchant.pointsBalance,
+      pointsFunded: merchant.pointsFunded,
     },
     staffCount: customerCount?.count ?? 0,
   })
+})
+
+adminRoutes.get('/merchants/:id/customers', async (c) => {
+  const merchantId = c.req.param('id')
+  const [merchant] = await db
+    .select({ id: merchants.id })
+    .from(merchants)
+    .where(eq(merchants.id, merchantId))
+    .limit(1)
+  if (!merchant) return c.json({ error: 'Not found' }, 404)
+
+  const notStaff = sql`${customerCards.customerId} NOT IN (SELECT user_id FROM merchant_staff WHERE merchant_id = ${merchantId})`
+
+  const customers = await db
+    .select({
+      customerId: customerCards.customerId,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      email: user.email,
+      fidelityPoints: customerCards.fidelityPoints,
+      mealVoucherBalance: customerCards.mealVoucherBalance,
+      lifetimePoints: customerCards.lifetimePoints,
+      lastVisitAt: customerCards.lastVisitAt,
+    })
+    .from(customerCards)
+    .innerJoin(user, eq(customerCards.customerId, user.id))
+    .where(and(eq(customerCards.merchantId, merchantId), notStaff))
+    .orderBy(desc(customerCards.lastVisitAt))
+    .limit(500)
+
+  const spentRows = await db
+    .select({
+      customerId: stampTransactions.customerId,
+      spentFidelity: sql<number>`coalesce(sum(case when ${stampTransactions.balanceType} = 'fidelity' and ${stampTransactions.type} in ('REMOVE_POINTS','REDEEM_REWARD') then ${stampTransactions.amount} else 0 end), 0)`,
+      spentMeal: sql<number>`coalesce(sum(case when ${stampTransactions.balanceType} = 'meal_voucher' and ${stampTransactions.type} = 'REMOVE_MEAL_VOUCHER' then ${stampTransactions.amount} else 0 end), 0)`,
+    })
+    .from(stampTransactions)
+    .where(eq(stampTransactions.merchantId, merchantId))
+    .groupBy(stampTransactions.customerId)
+
+  const spentMap = new Map(spentRows.map((r) => [r.customerId, r]))
+  const result = customers.map((cust) => {
+    const s = spentMap.get(cust.customerId)
+    return { ...cust, spentFidelity: s?.spentFidelity ?? 0, spentMeal: s?.spentMeal ?? 0 }
+  })
+
+  return c.json({ customers: result })
+})
+
+const adminAdjustSchema = z.object({
+  customerId: z.string().min(1),
+  balanceType: z.literal('fidelity'),
+  amount: z
+    .number()
+    .refine((v) => v !== 0, 'Amount cannot be zero')
+    .refine((v) => Math.abs(v) <= 1_000_000, 'Amount too large'),
+})
+
+adminRoutes.post('/merchants/:id/adjust', zValidator('json', adminAdjustSchema), async (c) => {
+  const merchantId = c.req.param('id')
+  const actorId = c.get('userId')!
+  const { customerId, balanceType, amount } = c.req.valid('json')
+
+  try {
+    const result = await adminAdjustBalance(actorId, merchantId, customerId, balanceType, amount)
+    return c.json({ success: true, ...result })
+  } catch (err) {
+    if (err instanceof AppError) {
+      return c.json({ error: err.message, code: err.code }, err.status as 400 | 403 | 404 | 409)
+    }
+    console.error('[AdminAdjust] Unexpected error:', err)
+    return c.json({ error: (err as Error)?.message || 'Adjust failed', code: 'ADJUST_ERROR' }, 500)
+  }
+})
+
+const fundMerchantSchema = z.object({
+  amount: z.number().int().positive().refine((v) => v <= 10_000_000, 'Amount too large'),
+})
+
+adminRoutes.post('/merchants/:id/fund', zValidator('json', fundMerchantSchema), async (c) => {
+  const merchantId = c.req.param('id')
+  const { amount } = c.req.valid('json')
+
+  const [merchant] = await db
+    .select({ id: merchants.id })
+    .from(merchants)
+    .where(eq(merchants.id, merchantId))
+    .limit(1)
+  if (!merchant) return c.json({ error: 'Not found' }, 404)
+
+  const [row] = await db
+    .update(merchants)
+    .set({
+      pointsBalance: sql`${merchants.pointsBalance} + ${amount}`,
+      pointsFunded: sql`${merchants.pointsFunded} + ${amount}`,
+      updatedAt: new Date(),
+    })
+    .where(eq(merchants.id, merchantId))
+    .returning({ pointsBalance: merchants.pointsBalance, pointsFunded: merchants.pointsFunded })
+
+  return c.json({ success: true, pointsBalance: row?.pointsBalance, pointsFunded: row?.pointsFunded })
+})
+
+adminRoutes.post('/merchants/:id/revoke', zValidator('json', fundMerchantSchema), async (c) => {
+  const merchantId = c.req.param('id')
+  const { amount } = c.req.valid('json')
+
+  const [merchant] = await db
+    .select({ id: merchants.id })
+    .from(merchants)
+    .where(eq(merchants.id, merchantId))
+    .limit(1)
+  if (!merchant) return c.json({ error: 'Not found' }, 404)
+
+  const [row] = await db
+    .update(merchants)
+    .set({
+      pointsBalance: sql`max(0, ${merchants.pointsBalance} - ${amount})`,
+      pointsFunded: sql`max(0, ${merchants.pointsFunded} - ${amount})`,
+      updatedAt: new Date(),
+    })
+    .where(eq(merchants.id, merchantId))
+    .returning({ pointsBalance: merchants.pointsBalance, pointsFunded: merchants.pointsFunded })
+
+  return c.json({ success: true, pointsBalance: row?.pointsBalance, pointsFunded: row?.pointsFunded })
 })

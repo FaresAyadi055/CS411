@@ -39,8 +39,8 @@ export interface Merchant {
   logoUrl?: string | null
   stampsPerReward: number
   planTier: 'starter' | 'growth' | 'pro'
-  monthlyPointCap: number
-  pointsUsedMonth: number
+  pointsBalance: number
+  pointsFunded: number
   isActive: boolean
   address?: string | null
   lat?: number | null
@@ -100,8 +100,9 @@ export interface DashboardStats {
   redemptionsCount: number
   uniqueCustomers: number
   newCustomersThisWeek: number
-  pointsUsedMonth: number
-  monthlyPointCap: number
+  pointsBalance: number
+  pointsFunded: number
+  pointsGiven: number
   transactionsToday: number
   transactionsThisWeek: number
   transactionsPrevWeek: number

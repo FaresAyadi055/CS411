@@ -19,9 +19,10 @@ export interface DashboardStats {
   uniqueCustomers: number
   newCustomersThisWeek: number
 
-  // Monthly point cap usage
-  pointsUsedMonth: number
-  monthlyPointCap: number
+  // Admin-funded point balance
+  pointsBalance: number
+  pointsFunded: number
+  pointsGiven: number
 
   // Activity counters (rolling windows, except transactionsToday which is calendar-day)
   transactionsToday: number
@@ -71,6 +72,8 @@ export async function getMerchantDashboard(merchantId: string, days = 14): Promi
   const last7dMs = nowMs - 7 * DAY_MS
   const prev7dStartMs = nowMs - 14 * DAY_MS
   const seriesStartMs = nowMs - windowDays * DAY_MS
+
+  const notStaff = sql`${customerCards.customerId} NOT IN (SELECT user_id FROM merchant_staff WHERE merchant_id = ${merchantId})`
 
   const [
     merchantRows,
@@ -140,11 +143,11 @@ export async function getMerchantDashboard(merchantId: string, days = 14): Promi
     db
       .select({ count: sql<number>`count(distinct ${customerCards.customerId})` })
       .from(customerCards)
-      .where(eq(customerCards.merchantId, merchantId)),
+      .where(and(eq(customerCards.merchantId, merchantId), notStaff)),
     db
       .select({ count: sql<number>`coalesce(count(*), 0)` })
       .from(customerCards)
-      .where(and(eq(customerCards.merchantId, merchantId), sql`${customerCards.createdAt} >= ${last7dMs}`)),
+      .where(and(eq(customerCards.merchantId, merchantId), notStaff, sql`${customerCards.createdAt} >= ${last7dMs}`)),
     db
       .select({ count: sql<number>`coalesce(count(*), 0)` })
       .from(stampTransactions)
@@ -203,7 +206,7 @@ export async function getMerchantDashboard(merchantId: string, days = 14): Promi
       })
       .from(customerCards)
       .innerJoin(user, eq(customerCards.customerId, user.id))
-      .where(eq(customerCards.merchantId, merchantId))
+      .where(and(eq(customerCards.merchantId, merchantId), notStaff))
       .orderBy(desc(customerCards.lifetimePoints))
       .limit(10),
     db
@@ -273,8 +276,9 @@ export async function getMerchantDashboard(merchantId: string, days = 14): Promi
     redemptionsCount: redemptionsCountResult[0]?.count ?? 0,
     uniqueCustomers: uniqueCustomersResult[0]?.count ?? 0,
     newCustomersThisWeek: newCustomersResult[0]?.count ?? 0,
-    pointsUsedMonth: merchant?.pointsUsedMonth ?? 0,
-    monthlyPointCap: merchant?.monthlyPointCap ?? 300,
+    pointsBalance: merchant?.pointsBalance ?? 0,
+    pointsFunded: merchant?.pointsFunded ?? 0,
+    pointsGiven: (merchant?.pointsFunded ?? 0) - (merchant?.pointsBalance ?? 0),
     transactionsToday: txTodayResult[0]?.count ?? 0,
     transactionsThisWeek: txWeekResult[0]?.count ?? 0,
     transactionsPrevWeek: txPrevWeekResult[0]?.count ?? 0,
@@ -300,7 +304,8 @@ export async function getMerchantDashboard(merchantId: string, days = 14): Promi
 }
 
 export async function getMerchantCustomers(merchantId: string, limit = 100, cursor?: number) {
-  const conditions = [eq(customerCards.merchantId, merchantId)]
+  const notStaff = sql`${customerCards.customerId} NOT IN (SELECT user_id FROM merchant_staff WHERE merchant_id = ${merchantId})`
+  const conditions = [eq(customerCards.merchantId, merchantId), notStaff]
   if (cursor !== undefined) conditions.push(sql`${customerCards.lastVisitAt} < ${cursor}`)
   return db
     .select({

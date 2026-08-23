@@ -130,18 +130,16 @@
     return Math.round(((cur - prev) / prev) * 100)
   })
 
-  const capPct = $derived.by(() => {
-    if (!stats || stats.monthlyPointCap <= 0) return 0
-    return Math.min(100, Math.round((stats.pointsUsedMonth / stats.monthlyPointCap) * 100))
+  const givenPct = $derived.by(() => {
+    if (!stats || stats.pointsFunded <= 0) return 0
+    return Math.min(100, Math.round((stats.pointsGiven / stats.pointsFunded) * 100))
   })
 
-  const remainingPoints = $derived(
-    stats ? Math.max(0, stats.monthlyPointCap - stats.pointsUsedMonth) : 0,
-  )
+  const remainingPoints = $derived(stats ? Math.max(0, stats.pointsBalance) : 0)
 
   $effect(() => {
     if (stats && mounted) {
-      const target = RING_C * (1 - capPct / 100)
+      const target = RING_C * (1 - givenPct / 100)
       requestAnimationFrame(() => {
         ringDash = target
       })
@@ -406,8 +404,8 @@
     <div class="card p-4 animate-slide-up" style="animation-delay: 260ms">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-sm font-semibold">{t('points.balance')}</h2>
-        <span class="text-xs font-bold" class:text-lost-text={capPct >= 100} class:text-primary={capPct < 100}>
-          {capPct}% {t('points.used')}
+        <span class="text-xs font-bold" class:text-lost-text={givenPct >= 100} class:text-primary={givenPct < 100}>
+          {givenPct}% {t('points.given')}
         </span>
       </div>
       <div class="flex items-center gap-4">
@@ -419,7 +417,7 @@
               cy="100"
               r={RING_R}
               fill="none"
-              stroke={capPct >= 100 ? 'var(--color-lost-text)' : 'var(--color-primary)'}
+              stroke={givenPct >= 100 ? 'var(--color-lost-text)' : 'var(--color-primary)'}
               stroke-width="16"
               stroke-linecap="round"
               stroke-dasharray={RING_C}
@@ -435,21 +433,17 @@
         <div class="flex-1 min-w-0">
           <div class="grid grid-cols-2 gap-2">
             <div class="bg-surface-container-low rounded-lg p-2 text-center">
-              <p class="text-sm font-bold text-lost-text tabular-nums">{stats.pointsUsedMonth.toLocaleString()}</p>
-              <p class="text-[10px] text-on-surface-variant">{t('points.used')}</p>
+              <p class="text-sm font-bold text-lost-text tabular-nums">{stats.pointsGiven.toLocaleString()}</p>
+              <p class="text-[10px] text-on-surface-variant">{t('points.given')}</p>
             </div>
             <div class="bg-surface-container-low rounded-lg p-2 text-center">
-              <p class="text-sm font-bold text-primary tabular-nums">{stats.monthlyPointCap.toLocaleString()}</p>
-              <p class="text-[10px] text-on-surface-variant">{t('points.cap')}</p>
+              <p class="text-sm font-bold text-primary tabular-nums">{stats.pointsFunded.toLocaleString()}</p>
+              <p class="text-[10px] text-on-surface-variant">{t('points.funded')}</p>
             </div>
           </div>
-          {#if capPct >= 100}
-            <p class="text-xs font-semibold text-lost-text mt-2 text-center">{t('points.full')}</p>
-          {:else}
-            <p class="text-[11px] text-on-surface-variant mt-2 text-center">
-              {t('points.used_of', { used: stats.pointsUsedMonth.toLocaleString(), cap: stats.monthlyPointCap.toLocaleString() })}
-            </p>
-          {/if}
+          <p class="text-[11px] text-on-surface-variant mt-2 text-center">
+            {t('points.given_of', { given: stats.pointsGiven.toLocaleString(), funded: stats.pointsFunded.toLocaleString() })}
+          </p>
         </div>
       </div>
     </div>

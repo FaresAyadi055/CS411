@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { ArrowLeft, Coins } from '@lucide/svelte'
+  import { ArrowLeft } from '@lucide/svelte'
   import { t } from '../lib/i18n.svelte'
   import { navigate } from '../stores/router.svelte'
   import { getUser } from '../stores/auth.svelte'
@@ -12,11 +12,11 @@
   let loading = $state(true)
   let error = $state(false)
 
-  let cap = $derived(merchant?.monthlyPointCap ?? 0)
-  let used = $derived(merchant?.pointsUsedMonth ?? 0)
-  let remaining = $derived(Math.max(0, cap - used))
-  let pct = $derived(cap > 0 ? Math.min(100, (used / cap) * 100) : 0)
-  let reachedCap = $derived(cap > 0 && remaining <= 0)
+  let balance = $derived(Math.max(0, merchant?.pointsBalance ?? 0))
+  let funded = $derived(merchant?.pointsFunded ?? 0)
+  let given = $derived(Math.max(0, funded - balance))
+  let pct = $derived(funded > 0 ? Math.min(100, (given / funded) * 100) : 0)
+  let lowBalance = $derived(balance <= 0)
 
   const R = 84
   const C = 2 * Math.PI * R
@@ -26,7 +26,7 @@
     try {
       const d = await api.get<{ merchant: Merchant }>('/api/cashier/merchant')
       merchant = d.merchant
-      setBusinessPoints(Math.max(0, d.merchant.monthlyPointCap - d.merchant.pointsUsedMonth))
+      setBusinessPoints(Math.max(0, d.merchant.pointsBalance))
     } catch {
       error = true
     } finally {
@@ -69,64 +69,61 @@
   {:else}
     <div class="card p-6 text-center mb-4 animate-scale-in">
       <p class="text-xs text-on-surface-variant uppercase tracking-wide">{t('points.balance')}</p>
-      <p class="text-4xl font-bold text-primary mt-1">{remaining.toLocaleString()}</p>
+      <p class="text-4xl font-bold mt-1" class:text-lost-text={lowBalance} class:text-primary={!lowBalance}>{balance.toLocaleString()}</p>
       <p class="text-xs text-on-surface-variant mt-0.5">{t('points.balance_sub')}</p>
     </div>
 
+    {#if lowBalance}
+      <div class="card p-4 mb-4 bg-amber-50 border border-amber-300 text-amber-800 text-sm">
+        <p class="font-semibold">{t('points.out_of_points_title')}</p>
+        <p class="mt-1">{t('points.out_of_points_desc')}</p>
+      </div>
+    {/if}
+
     <div class="card p-6 flex flex-col items-center animate-slide-up">
-      {#if cap > 0}
-        <div class="relative w-[200px] h-[200px]">
-          <svg viewBox="0 0 200 200" class="w-full h-full -rotate-90">
-            <circle
-              cx="100"
-              cy="100"
-              r={R}
-              fill="none"
-              stroke="var(--color-outline)"
-              stroke-width="16"
-            />
-            <circle
-              cx="100"
-              cy="100"
-              r={R}
-              fill="none"
-              stroke={reachedCap ? 'var(--color-lost-text)' : 'var(--color-primary)'}
-              stroke-width="16"
-              stroke-linecap="round"
-              stroke-dasharray={C}
-              stroke-dashoffset={dash}
-              style="transition: stroke-dashoffset 1s ease-out;"
-            />
-          </svg>
-          <div class="absolute inset-0 flex flex-col items-center justify-center">
-            <span class="text-2xl font-bold">{Math.round(pct)}%</span>
-            <span class="text-xs text-on-surface-variant">{t('points.used')}</span>
-          </div>
+      <div class="relative w-[200px] h-[200px]">
+        <svg viewBox="0 0 200 200" class="w-full h-full -rotate-90">
+          <circle
+            cx="100"
+            cy="100"
+            r={R}
+            fill="none"
+            stroke="var(--color-outline)"
+            stroke-width="16"
+          />
+          <circle
+            cx="100"
+            cy="100"
+            r={R}
+            fill="none"
+            stroke={lowBalance ? 'var(--color-lost-text)' : 'var(--color-primary)'}
+            stroke-width="16"
+            stroke-linecap="round"
+            stroke-dasharray={C}
+            stroke-dashoffset={dash}
+            style="transition: stroke-dashoffset 1s ease-out;"
+          />
+        </svg>
+        <div class="absolute inset-0 flex flex-col items-center justify-center">
+          <span class="text-2xl font-bold">{Math.round(pct)}%</span>
+          <span class="text-xs text-on-surface-variant">{t('points.given')}</span>
         </div>
+      </div>
 
-        <div class="grid grid-cols-2 gap-3 w-full mt-6">
-          <div class="card p-3 text-center bg-surface-container-low">
-            <p class="text-lg font-bold text-lost-text">{used.toLocaleString()}</p>
-            <p class="text-[11px] text-on-surface-variant">{t('points.used')}</p>
-          </div>
-          <div class="card p-3 text-center bg-surface-container-low">
-            <p class="text-lg font-bold text-primary">{cap.toLocaleString()}</p>
-            <p class="text-[11px] text-on-surface-variant">{t('points.cap')}</p>
-          </div>
+      <div class="grid grid-cols-2 gap-3 w-full mt-6">
+        <div class="card p-3 text-center bg-surface-container-low">
+          <p class="text-lg font-bold text-lost-text">{given.toLocaleString()}</p>
+          <p class="text-[11px] text-on-surface-variant">{t('points.given')}</p>
         </div>
+        <div class="card p-3 text-center bg-surface-container-low">
+          <p class="text-lg font-bold text-primary">{funded.toLocaleString()}</p>
+          <p class="text-[11px] text-on-surface-variant">{t('points.funded')}</p>
+        </div>
+      </div>
 
-        <p class="text-xs text-on-surface-variant mt-4 text-center">
-          {t('points.used_of', { used: used.toLocaleString(), cap: cap.toLocaleString() })}
-        </p>
-        {#if reachedCap}
-          <p class="text-xs font-semibold text-lost-text mt-2 text-center">{t('points.full')}</p>
-        {/if}
-      {:else}
-        <div class="flex flex-col items-center py-6 text-center">
-          <Coins size={40} class="text-on-surface-variant mb-3" />
-          <p class="text-sm text-on-surface-variant">{t('points.no_cap')}</p>
-        </div>
-      {/if}
+      <p class="text-xs text-on-surface-variant mt-4 text-center">
+        {t('points.given_of', { given: given.toLocaleString(), funded: funded.toLocaleString() })}
+      </p>
     </div>
   {/if}
 </main>

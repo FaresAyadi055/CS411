@@ -329,7 +329,6 @@ businessRoutes.delete('/rewards/:id', async (c) => {
 const settingsSchema = z.object({
   name: z.string().min(1).optional(),
   stampsPerReward: z.number().int().positive().optional(),
-  monthlyPointCap: z.number().int().positive().optional(),
   logoUrl: z.string().url().nullable().optional(),
   lat: z.number().min(-90).max(90).nullable().optional(),
   lng: z.number().min(-180).max(180).nullable().optional(),

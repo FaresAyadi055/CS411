@@ -4,7 +4,7 @@
   import { t } from '../lib/i18n.svelte'
   import api from '../lib/api'
   import type { Merchant } from '../lib/types'
-  import { setBusinessPoints } from '../stores/businessPoints.svelte'
+  import { setBusinessPoints, getBusinessPoints } from '../stores/businessPoints.svelte'
   import { showToast } from '../stores/toast.svelte'
   import StarBadge from '../components/StarBadge.svelte'
   import { Html5Qrcode } from 'html5-qrcode'
@@ -47,6 +47,7 @@
   let fidelityDirty = $derived(card && serverCard && Math.abs(card.fidelityPoints - serverCard.fidelityPoints) > 0.0005)
   let mealDirty = $derived(card && serverCard && Math.abs(card.mealVoucherBalance - serverCard.mealVoucherBalance) > 0.0005)
   let hasPending = $derived(fidelityDirty || mealDirty)
+  let merchantOutOfPoints = $derived((getBusinessPoints() ?? 1) <= 0)
 
   onMount(async () => { await refreshMerchant() })
   onDestroy(() => { stopScanner() })
@@ -55,7 +56,7 @@
     try {
       const d = await api.get<{ merchant: Merchant }>('/api/cashier/merchant')
       merchant = d.merchant
-      setBusinessPoints(Math.max(0, d.merchant.monthlyPointCap - d.merchant.pointsUsedMonth))
+      setBusinessPoints(Math.max(0, d.merchant.pointsBalance))
     } catch {}
   }
 
@@ -178,6 +179,13 @@
     <h1 class="text-xl font-bold">{t('scan.title')}</h1>
     {#if merchant}<p class="text-sm text-on-surface-variant mt-1">{merchant.name}</p>{/if}
   </div>
+
+  {#if merchantOutOfPoints}
+    <div class="card p-4 mb-4 bg-amber-50 border border-amber-300 text-amber-800 text-sm">
+      <p class="font-semibold">{t('points.out_of_points_title')}</p>
+      <p class="mt-1">{t('points.out_of_points_desc')}</p>
+    </div>
+  {/if}
 
   {#if showManual}
     <div class="card p-6">
