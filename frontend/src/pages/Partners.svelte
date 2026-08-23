@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Building2, MapPin, Users } from '@lucide/svelte'
+  import { Building2, Gift, Users } from '@lucide/svelte'
   import { t } from '../lib/i18n.svelte'
   import { navigate } from '../stores/router.svelte'
   import api from '../lib/api'
@@ -13,6 +13,7 @@
     logoUrl: string | null
     address: string | null
     clientsCount: number
+    rewardsCount: number
     subscribed: boolean
   }
 
@@ -83,12 +84,10 @@
             {/if}
             <div class="flex-1 min-w-0">
               <p class="font-semibold text-sm truncate">{p.name || 'Partner'}</p>
-              {#if p.address}
-                <p class="text-xs text-on-surface-variant mt-0.5 truncate flex items-center gap-1">
-                  <MapPin size={12} class="shrink-0" />
-                  {p.address}
-                </p>
-              {/if}
+              <p class="text-xs text-on-surface-variant mt-0.5 flex items-center gap-1">
+                <Gift size={12} class="shrink-0" />
+                {t('partners.rewards', { n: p.rewardsCount.toString() })}
+              </p>
               <p class="text-xs text-on-surface-variant mt-0.5 flex items-center gap-1">
                 <Users size={12} class="shrink-0" />
                 {t('partners.clients', { n: p.clientsCount.toString() })}

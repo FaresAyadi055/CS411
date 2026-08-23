@@ -3,7 +3,7 @@ import { eq, and } from 'drizzle-orm'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { db } from '../db'
-import { merchantStaff, merchants, rewards } from '../db/schema'
+import { merchantStaff, merchants, rewards, merchantPublic } from '../db/schema'
 import { requireAuth } from '../middleware/auth'
 import { requireRole } from '../middleware/requireRole'
 import { verifyQr, adjustBalance } from '../services/stamp'
@@ -71,7 +71,7 @@ cashierRoutes.get('/merchant', async (c) => {
   if (!staff) return c.json({ error: 'Not staff', code: 'NOT_STAFF' }, 404)
 
   const [merchant] = await db
-    .select()
+    .select(merchantPublic)
     .from(merchants)
     .where(eq(merchants.id, staff.merchantId))
     .limit(1)

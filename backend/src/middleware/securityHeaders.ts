@@ -13,7 +13,7 @@ function buildCsp(): string {
     `connect-src 'self' ${backendOrigin} ${frontendOrigin}`,
     "script-src 'self' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: ${backendOrigin}",
+    `img-src 'self' data: ${backendOrigin}`,
     "font-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { QrCode, ScanLine, Gift, BarChart3, ArrowRight, Mail, Check, Sparkles } from '@lucide/svelte'
+  import { QrCode, ScanLine, Gift, BarChart3, ArrowRight, Mail, Phone, Check, Sparkles } from '@lucide/svelte'
   import { t } from '../lib/i18n.svelte'
   import { navigate } from '../stores/router.svelte'
   import StarBadge from '../components/StarBadge.svelte'
@@ -141,6 +141,10 @@
       </span>
       <a href="mailto:hello@fidelito.tn" class="flex items-center gap-2 text-primary font-semibold hover:underline">
         hello@fidelito.tn
+      </a>
+      <a href="tel:+21627832488" class="flex items-center gap-2 text-primary font-semibold hover:underline">
+        <Phone size={16} />
+        +216 27 832 488
       </a>
     </div>
   </section>

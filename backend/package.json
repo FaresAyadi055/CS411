@@ -5,10 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently --names server,studio --prefix-colors blue,green \"bun --watch src/server.ts\" \"bun drizzle-kit studio\"",
-    "dev:worker": "wrangler dev",
     "start": "bun src/server.ts",
-    "deploy": "wrangler deploy --minify",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "db:generate": "dotenv -e .env -- drizzle-kit generate",
     "db:push": "dotenv -e .env -- drizzle-kit push",
     "db:migrate": "dotenv -e .env -- drizzle-kit migrate",
@@ -36,7 +33,6 @@
     "concurrently": "^10.0.5",
     "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.10",
-    "typescript": "~6.0.3",
-    "wrangler": "^4.4.0"
+    "typescript": "~6.0.3"
   }
 }

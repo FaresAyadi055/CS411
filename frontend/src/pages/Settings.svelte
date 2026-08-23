@@ -210,9 +210,10 @@
   </section>
 
   <section class="mb-6">
-    <div class="flex items-center gap-3 text-sm">
+    <div class="flex flex-col gap-1 text-sm">
       <span class="text-on-surface-variant">{t('settings.contact')}</span>
       <a href="mailto:hello@fidelito.tn" class="text-primary hover:underline">hello@fidelito.tn</a>
+      <a href="tel:+21627832488" class="text-primary hover:underline">+216 27 832 488</a>
     </div>
     <p class="text-xs text-on-surface-variant mt-3">{t('settings.copyright').replace('{year}', String(new Date().getFullYear()))}</p>
     <p class="text-xs text-on-surface-variant mt-1">v{VERSION}</p>

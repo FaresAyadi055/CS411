@@ -1,5 +1,4 @@
 import { createMiddleware } from 'hono/factory'
-import { eq, and, gte, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { db } from '../db'
 import { rateLimitLog } from '../db/schema'
@@ -30,29 +29,28 @@ function clientIp(c: { req: { header: (n: string) => string | undefined } }): st
   )
 }
 
-const RATE_LIMIT_DB_FAILED = new Set<string>()
+// In-memory sliding window (VPS: single long-lived process).
+// Keeps rate-limit decisions off the SQLite critical path (no per-request COUNT under lock).
+const hits = new Map<string, number[]>()
 
-async function checkAndLog(ip: string, group: string, max: number, windowMs: number): Promise<boolean> {
-  const windowStart = new Date(Date.now() - windowMs).toISOString()
+function checkAndLog(ip: string, group: string, max: number, windowMs: number): boolean {
+  const now = Date.now()
+  const windowStart = now - windowMs
   const key = `${ip}:${group}`
-  if (RATE_LIMIT_DB_FAILED.has(key)) return false
-  try {
-    const [row] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(rateLimitLog)
-      .where(and(
-        eq(rateLimitLog.ipAddress, ip),
-        eq(rateLimitLog.reason, group),
-        gte(rateLimitLog.triggeredAt, windowStart),
-      ))
-    const count = row?.count ?? 0
-    if (count >= max) return true
-    await db.insert(rateLimitLog).values({ id: ulid(), ipAddress: ip, reason: group })
-    return false
-  } catch {
-    RATE_LIMIT_DB_FAILED.add(key)
+  const recent = (hits.get(key) ?? []).filter((t) => t >= windowStart)
+  const limited = recent.length >= max
+  if (!limited) {
+    recent.push(now)
+    hits.set(key, recent)
     return false
   }
+
+  // Non-blocking audit log for the admin view (append only, WAL-friendly).
+  db.insert(rateLimitLog)
+    .values({ id: ulid(), ipAddress: ip, reason: group })
+    .catch(() => {})
+
+  return true
 }
 
 export const rateLimitMiddleware = createMiddleware<{ Variables: AppVariables }>(

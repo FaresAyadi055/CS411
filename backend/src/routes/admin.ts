@@ -1,9 +1,19 @@
 import { Hono } from 'hono'
-import { eq, desc, gte, sql } from 'drizzle-orm'
+import { eq, desc, gte, sql, or } from 'drizzle-orm'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { db } from '../db'
-import { user, rateLimitLog, authUsers, merchants, merchantStaff, merchantStaff as staffTable } from '../db/schema'
+import {
+  user,
+  rateLimitLog,
+  authUsers,
+  merchants,
+  merchantStaff,
+  merchantStaff as staffTable,
+  merchantPublic,
+  stampTransactions,
+  customerCards,
+} from '../db/schema'
 import { requireAuth } from '../middleware/auth'
 import { requireRole } from '../middleware/requireRole'
 import { generateSecret } from '../services/totp'
@@ -72,6 +82,30 @@ adminRoutes.patch('/users/:id', zValidator('json', userPatchSchema), async (c) =
 
 adminRoutes.delete('/users/:id', async (c) => {
   const id = c.req.param('id')
+
+  // Guard against destroying financial/audit history. Deleting a user cascades to their
+  // stamp_transactions and customer_cards (and triggers an FK error if referenced as a
+  // cashier). Block deletion until a product decision is made (soft-delete/anonymize).
+  const [txn] = await db
+    .select({ id: stampTransactions.id })
+    .from(stampTransactions)
+    .where(or(eq(stampTransactions.customerId, id), eq(stampTransactions.cashierId, id)))
+    .limit(1)
+  if (txn) {
+    return c.json(
+      { error: 'Cannot delete user with transaction history', code: 'USER_HAS_HISTORY' },
+      409,
+    )
+  }
+  const [card] = await db
+    .select({ id: customerCards.id })
+    .from(customerCards)
+    .where(eq(customerCards.customerId, id))
+    .limit(1)
+  if (card) {
+    return c.json({ error: 'Cannot delete user with loyalty cards', code: 'USER_HAS_CARDS' }, 409)
+  }
+
   await db.delete(authUsers).where(eq(authUsers.id, id))
   return c.json({ ok: true })
 })
@@ -89,17 +123,7 @@ adminRoutes.get('/rate-limits', async (c) => {
 
 adminRoutes.get('/merchants', async (c) => {
   const rows = await db
-    .select({
-      id: merchants.id,
-      ownerId: merchants.ownerId,
-      name: merchants.name,
-      slug: merchants.slug,
-      planTier: merchants.planTier,
-      monthlyPointCap: merchants.monthlyPointCap,
-      pointsUsedMonth: merchants.pointsUsedMonth,
-      isActive: merchants.isActive,
-      createdAt: merchants.createdAt,
-    })
+    .select(merchantPublic)
     .from(merchants)
     .orderBy(desc(merchants.createdAt))
   return c.json({ merchants: rows })
@@ -161,7 +185,7 @@ adminRoutes.post('/merchants', zValidator('json', createMerchantSchema), async (
 
 adminRoutes.get('/merchants/:id', async (c) => {
   const [merchant] = await db
-    .select()
+    .select(merchantPublic)
     .from(merchants)
     .where(eq(merchants.id, c.req.param('id')))
     .limit(1)
@@ -181,7 +205,7 @@ adminRoutes.patch('/merchants/:id', zValidator('json', updateMerchantSchema), as
   const id = c.req.param('id')
   const body = c.req.valid('json')
   await db.update(merchants).set({ ...body, updatedAt: new Date() }).where(eq(merchants.id, id))
-  const [row] = await db.select().from(merchants).where(eq(merchants.id, id)).limit(1)
+  const [row] = await db.select(merchantPublic).from(merchants).where(eq(merchants.id, id)).limit(1)
   return c.json({ merchant: row })
 })
 
@@ -212,7 +236,7 @@ adminRoutes.get('/merchants/:id/staff', async (c) => {
 adminRoutes.get('/merchants/:id/stats', async (c) => {
   const merchantId = c.req.param('id')
   const [merchant] = await db
-    .select()
+    .select(merchantPublic)
     .from(merchants)
     .where(eq(merchants.id, merchantId))
     .limit(1)

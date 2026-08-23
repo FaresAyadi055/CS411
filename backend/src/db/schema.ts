@@ -5,6 +5,7 @@ import {
   real,
   index,
   uniqueIndex,
+  check,
 } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
 
@@ -119,8 +120,12 @@ export const rateLimitLog = sqliteTable('rate_limit_log', {
   isResolved: integer('is_resolved').default(0),
 }, (table) => ({
   ipIdx: index('rate_limit_ip_idx').on(table.ipAddress),
+  triggeredIdx: index('rate_limit_triggered_idx').on(table.triggeredAt),
 }))
 
+// NOTE: `apikey` is currently UNUSED — no route or service issues API-key auth.
+// Wired into Better Auth via `plugins: [apiKey()]` in auth.ts but dormant. Remove the
+// plugin + this table, or implement merchant API keys, before relying on it.
 export const apikey = sqliteTable('apikey', {
   id: text('id').primaryKey(),
   configId: text('config_id').notNull(),
@@ -161,7 +166,7 @@ export const merchants = sqliteTable('merchants', {
   lng: real('lng'),
   address: text('address'),
   stampsPerReward: integer('stamps_per_reward').notNull().default(10),
-  planTier: text('plan_tier').notNull().default('starter'),
+  planTier: text('plan_tier', { enum: ['starter', 'growth', 'pro'] }).notNull().default('starter'),
   monthlyPointCap: integer('monthly_point_cap').notNull().default(300),
   pointsUsedMonth: integer('points_used_month').notNull().default(0),
   secretHmacKey: text('secret_hmac_key').notNull(),
@@ -172,6 +177,27 @@ export const merchants = sqliteTable('merchants', {
   ownerIdx: index('merchants_owner_idx').on(table.ownerId),
   slugIdx: uniqueIndex('merchants_slug_idx').on(table.slug),
 }))
+
+// Public merchant projection — intentionally excludes `secretHmacKey` (anti-replay signing
+// secret). Use this for every merchant read that is returned to a client; selecting the full
+// row leaks the HMAC secret (see admin/business merchant routes).
+export const merchantPublic = {
+  id: merchants.id,
+  ownerId: merchants.ownerId,
+  name: merchants.name,
+  slug: merchants.slug,
+  logoUrl: merchants.logoUrl,
+  lat: merchants.lat,
+  lng: merchants.lng,
+  address: merchants.address,
+  stampsPerReward: merchants.stampsPerReward,
+  planTier: merchants.planTier,
+  monthlyPointCap: merchants.monthlyPointCap,
+  pointsUsedMonth: merchants.pointsUsedMonth,
+  isActive: merchants.isActive,
+  createdAt: merchants.createdAt,
+  updatedAt: merchants.updatedAt,
+} as const
 
 export const merchantStaff = sqliteTable('merchant_staff', {
   id: text('id').primaryKey(),
@@ -185,6 +211,10 @@ export const merchantStaff = sqliteTable('merchant_staff', {
 }))
 
 export const customerCards = sqliteTable('customer_cards', {
+  // NOTE: customerId is ON DELETE CASCADE — deleting a user currently erases all their
+  // stamp transactions and card balances (financial/audit history) across every merchant.
+  // Admin user-deletion is guarded at the app layer (routes/admin.ts) to prevent this until a
+  // product decision is made (soft-delete/anonymize vs. hard delete).
   id: text('id').primaryKey(),
   customerId: text('customer_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
   merchantId: text('merchant_id').notNull().references(() => merchants.id, { onDelete: 'cascade' }),
@@ -199,6 +229,10 @@ export const customerCards = sqliteTable('customer_cards', {
   customerIdx: index('card_customer_idx').on(table.customerId),
   merchantIdx: index('card_merchant_idx').on(table.merchantId),
   customerMerchantUnq: uniqueIndex('card_customer_merchant_unq').on(table.customerId, table.merchantId),
+  chkFidelity: check('chk_fidelity_points', sql`${table.fidelityPoints} >= 0`),
+  chkMeal: check('chk_meal_voucher_balance', sql`${table.mealVoucherBalance} >= 0`),
+  chkLifetime: check('chk_lifetime_points', sql`${table.lifetimePoints} >= 0`),
+  chkMealTotal: check('chk_meal_voucher_total', sql`${table.mealVoucherTotal} >= 0`),
 }))
 
 export const rewards = sqliteTable('rewards', {
@@ -218,9 +252,9 @@ export const stampTransactions = sqliteTable('stamp_transactions', {
   id: text('id').primaryKey(),
   merchantId: text('merchant_id').notNull().references(() => merchants.id, { onDelete: 'cascade' }),
   customerId: text('customer_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-  cashierId: text('cashier_id').notNull().references(() => authUsers.id),
-  type: text('type').notNull(), // 'ADD_POINTS', 'REMOVE_POINTS', 'ADD_MEAL_VOUCHER', 'REMOVE_MEAL_VOUCHER'
-  balanceType: text('balance_type').notNull(), // 'fidelity' or 'meal_voucher'
+  cashierId: text('cashier_id').notNull().references(() => authUsers.id, { onDelete: 'restrict' }),
+  type: text('type', { enum: ['ADD_POINTS', 'REMOVE_POINTS', 'ADD_MEAL_VOUCHER', 'REMOVE_MEAL_VOUCHER'] }).notNull(),
+  balanceType: text('balance_type', { enum: ['fidelity', 'meal_voucher'] }).notNull(),
   rewardId: text('reward_id').references(() => rewards.id, { onDelete: 'set null' }),
   amount: real('amount').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),

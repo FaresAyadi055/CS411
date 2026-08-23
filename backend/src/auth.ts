@@ -73,6 +73,8 @@ export function getAuth(): ReturnType<typeof betterAuth> {
         },
       },
     },
+    // apiKey plugin is currently UNUSED (no API-key auth flow exists). Left in place to
+    // keep the `apikey` table managed by Better Auth; remove both if API keys stay unused.
     plugins: [apiKey()],
     session: {
       expiresIn: 60 * 60 * 24 * 7,

@@ -137,34 +137,52 @@ clientRoutes.get('/cards/:merchantId', async (c) => {
   const userId = c.get('userId')!
   const merchantId = c.req.param('merchantId')
 
-  const [card] = await db
+  const [merchant] = await db
     .select({
-      id: customerCards.id,
-      merchantId: customerCards.merchantId,
-      merchantName: merchants.name,
-      merchantLogo: merchants.logoUrl,
-      merchantAddress: merchants.address,
-      merchantLat: merchants.lat,
-      merchantLng: merchants.lng,
-      fidelityPoints: customerCards.fidelityPoints,
-      mealVoucherBalance: customerCards.mealVoucherBalance,
-      lifetimePoints: customerCards.lifetimePoints,
-      mealVoucherTotal: customerCards.mealVoucherTotal,
-      lastVisitAt: customerCards.lastVisitAt,
+      id: merchants.id,
+      name: merchants.name,
+      logoUrl: merchants.logoUrl,
+      address: merchants.address,
+      lat: merchants.lat,
+      lng: merchants.lng,
     })
+    .from(merchants)
+    .where(eq(merchants.id, merchantId))
+    .limit(1)
+
+  if (!merchant) return c.json({ error: 'Merchant not found', code: 'MERCHANT_NOT_FOUND' }, 404)
+
+  const [existing] = await db
+    .select()
     .from(customerCards)
-    .innerJoin(merchants, eq(customerCards.merchantId, merchants.id))
     .where(and(eq(customerCards.customerId, userId), eq(customerCards.merchantId, merchantId)))
     .limit(1)
 
-  if (!card) return c.json({ error: 'Card not found', code: 'CARD_NOT_FOUND' }, 404)
+  const isSubscribed = !!existing
 
-  const txs = await db
-    .select()
-    .from(stampTransactions)
-    .where(and(eq(stampTransactions.customerId, userId), eq(stampTransactions.merchantId, merchantId)))
-    .orderBy(desc(stampTransactions.createdAt))
-    .limit(30)
+  const card = {
+    id: existing?.id ?? '',
+    merchantId: merchant.id,
+    merchantName: merchant.name,
+    merchantLogo: merchant.logoUrl ?? null,
+    merchantAddress: merchant.address ?? null,
+    merchantLat: merchant.lat ?? null,
+    merchantLng: merchant.lng ?? null,
+    fidelityPoints: existing?.fidelityPoints ?? 0,
+    mealVoucherBalance: existing?.mealVoucherBalance ?? 0,
+    lifetimePoints: existing?.lifetimePoints ?? 0,
+    mealVoucherTotal: existing?.mealVoucherTotal ?? 0,
+    lastVisitAt: existing?.lastVisitAt ?? null,
+  }
+
+  const txs = isSubscribed
+    ? await db
+        .select()
+        .from(stampTransactions)
+        .where(and(eq(stampTransactions.customerId, userId), eq(stampTransactions.merchantId, merchantId)))
+        .orderBy(desc(stampTransactions.createdAt))
+        .limit(30)
+    : []
 
   const merchantRewards = await db
     .select({
@@ -179,10 +197,10 @@ clientRoutes.get('/cards/:merchantId', async (c) => {
 
   const rewardsWithStatus = merchantRewards.map((r) => ({
     ...r,
-    canRedeem: card.fidelityPoints >= r.stampsCost,
+    canRedeem: (existing?.fidelityPoints ?? 0) >= r.stampsCost,
   }))
 
-  return c.json({ card, transactions: txs, rewards: rewardsWithStatus })
+  return c.json({ card, transactions: txs, rewards: rewardsWithStatus, isSubscribed })
 })
 
 clientRoutes.get('/transactions', async (c) => {
@@ -284,9 +302,16 @@ clientRoutes.get('/merchants', async (c) => {
     .where(eq(merchantSubscriptions.userId, userId))
   const mySet = new Set(mySubs.map((s) => s.merchantId))
 
+  const rewardCounts = await db
+    .select({ merchantId: rewards.merchantId, count: sql<number>`count(*)` })
+    .from(rewards)
+    .groupBy(rewards.merchantId)
+  const rewardMap = new Map<string, number>(rewardCounts.map((r) => [r.merchantId, Number(r.count)]))
+
   const merchantsWithMeta = merchantsList.map((m) => ({
     ...m,
     clientsCount: subMap.get(m.id) ?? 0,
+    rewardsCount: rewardMap.get(m.id) ?? 0,
     subscribed: mySet.has(m.id),
   }))
 

@@ -7,16 +7,9 @@ import { generateSecret } from '../services/totp'
 import { randomBytes } from 'node:crypto'
 
 async function main() {
-  const tursoUrl = process.env.TURSO_SQLITE_DATABASE_URL
-  const tursoToken = process.env.TURSO_TOKEN
   const localDbPath = process.env.LOCAL_DB_PATH ?? 'file:../database/app.db'
 
-  let client: ReturnType<typeof createClient>
-  if (tursoUrl && tursoToken) {
-    client = createClient({ url: tursoUrl, authToken: tursoToken })
-  } else {
-    client = createClient({ url: localDbPath })
-  }
+  const client = createClient({ url: localDbPath })
 
   const db = drizzle(client, { schema })
   const now = new Date()

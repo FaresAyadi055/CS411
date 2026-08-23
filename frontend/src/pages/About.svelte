@@ -5,7 +5,7 @@
 
   const points = [
     { icon: Layers, title: 'Hono + Svelte 5', text: 'A minimal Hono API in Bun or Cloudflare Workers with a Svelte 5 (runes) single-page frontend.' },
-    { icon: Database, title: 'Drizzle + Turso', text: 'Type-safe SQLite schema managed with Drizzle ORM, running on Turso or a local file.' },
+    { icon: Database, title: 'Drizzle + SQLite', text: 'Type-safe SQLite schema managed with Drizzle ORM, running on a local SQLite file.' },
     { icon: ShieldCheck, title: 'Better Auth', text: 'Email/password, social OAuth, and email OTP verification — plus rate limiting and security headers.' },
   ]
 </script>

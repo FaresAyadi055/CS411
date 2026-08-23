@@ -11,7 +11,7 @@ Fidelito.tn — a digital loyalty card platform for small to medium Tunisian bus
 | Layer | Technology |
 |-------|-----------|
 | Backend | Hono + Drizzle ORM + Better Auth |
-| Database | Turso (SQLite) with libSQL client |
+| Database | SQLite (local file) with libSQL client |
 | Auth | Better Auth (email/password, bearer tokens, Google/Facebook OAuth, email OTP) |
 | QR/TOTP | RFC 6238 TOTP (HMAC-SHA1, 6 digits, 30s period) — hand-rolled with Web Crypto |
 | Frontend | Svelte 5 (runes mode, CSR) + Vite 8 |
@@ -118,8 +118,6 @@ Fidelito.tn — a digital loyalty card platform for small to medium Tunisian bus
 | Key | Default / Notes |
 |-----|----------------|
 | `DEPLOYMENT_MODE` | auto (`vps` or `cloudflare`) |
-| `TURSO_SQLITE_DATABASE_URL` | Turso remote DB |
-| `TURSO_TOKEN` | Turso auth token |
 | `CORS_ORIGIN` | auto-detected local IP |
 | `BETTER_AUTH_API_KEY` | fallback: `dev-only-better-auth-secret-min-32-chars!` |
 | `BETTER_AUTH_URL` | `http://localhost:8787` |
@@ -128,7 +126,7 @@ Fidelito.tn — a digital loyalty card platform for small to medium Tunisian bus
 | `RESEND_API_KEY` / `RESEND_FROM` | Email via Resend |
 | `DISABLE_RATE_LIMITING` | `'true'` to disable rate limiting (dev only) |
 | `DISABLE_AUTH` | `'true'` to bypass auth middleware for local dev |
-| `LOCAL_DB_PATH` | `file:../database/app.db` — local SQLite path when Turso not configured |
+| `LOCAL_DB_PATH` | `file:../database/app.db` — local SQLite path |
 | `PORT` | 8787 |
 | `FRONTEND_URL` | used for CORS and redirect URLs |
 

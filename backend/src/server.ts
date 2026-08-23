@@ -1,6 +1,7 @@
 import { createApp } from './app'
 import { env } from './config/env'
 import { db } from './db'
+import { startCleanup } from './lib/cleanup'
 import { networkInterfaces } from 'node:os'
 
 function getLocalIP(): string {
@@ -28,6 +29,7 @@ const app = createApp()
 const localIP = getLocalIP()
 
 checkDbReady().then(() => {
+  startCleanup()
   Bun.serve({
     fetch: app.fetch,
     port: env.port,

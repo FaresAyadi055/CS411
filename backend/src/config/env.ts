@@ -5,8 +5,6 @@ import { networkInterfaces } from 'node:os'
 /** Vars/secrets from the Cloudflare dashboard or wrangler [vars] / secret put */
 export interface CloudflareBindings {
   DEPLOYMENT_MODE?: string
-  TURSO_SQLITE_DATABASE_URL?: string
-  TURSO_TOKEN?: string
   CORS_ORIGIN?: string
   RESEND_API_KEY?: string
   RESEND_FROM?: string
@@ -30,8 +28,6 @@ export interface CloudflareBindings {
 /** All keys we read from Worker env — must be listed explicitly (secrets are not enumerable). */
 export const BINDING_KEYS = [
   'DEPLOYMENT_MODE',
-  'TURSO_SQLITE_DATABASE_URL',
-  'TURSO_TOKEN',
   'CORS_ORIGIN',
   'RESEND_API_KEY',
   'RESEND_FROM',
@@ -123,19 +119,10 @@ export const env = {
   get deploymentMode(): 'vps' | 'cloudflare' {
     const mode = readBinding('DEPLOYMENT_MODE')
     if (mode === 'vps' || mode === 'cloudflare') return mode
-    if (readBinding('TURSO_SQLITE_DATABASE_URL') && readBinding('TURSO_TOKEN')) {
-      return 'cloudflare'
-    }
     return 'vps'
   },
   get port() {
     return Number(readBinding('PORT') ?? 8787)
-  },
-  get tursoUrl() {
-    return readBinding('TURSO_SQLITE_DATABASE_URL')
-  },
-  get tursoToken() {
-    return readBinding('TURSO_TOKEN')
   },
   get useLocalDb() {
     return readBinding('USE_LOCAL_DB') === 'true'

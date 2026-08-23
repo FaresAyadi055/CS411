@@ -65,11 +65,6 @@ export function createApp() {
 
   app.on(['POST', 'GET'], '/api/auth/*', (c) => getAuth().handler(c.req.raw))
   app.get('/health', async (c) => {
-    if (env.deploymentMode !== 'cloudflare') return c.json({ ok: true })
-
-    if (!env.tursoUrl || !env.tursoToken) {
-      return c.json({ ok: false, db: false, error: 'Database not configured' }, 503)
-    }
     try {
       await db.select().from(userSchema).limit(1)
       return c.json({ ok: true, db: true })

@@ -6,6 +6,7 @@ import {
   stampTransactions,
   rewards,
   user,
+  merchantPublic,
 } from '../db/schema'
 
 export interface DashboardStats {
@@ -91,7 +92,7 @@ export async function getMerchantDashboard(merchantId: string, days = 14): Promi
     topRewardsResult,
     recentTxs,
   ] = await Promise.all([
-    db.select().from(merchants).where(eq(merchants.id, merchantId)).limit(1),
+    db.select(merchantPublic).from(merchants).where(eq(merchants.id, merchantId)).limit(1),
     db
       .select({ sum: sql<number>`coalesce(sum(${stampTransactions.amount}), 0)` })
       .from(stampTransactions)

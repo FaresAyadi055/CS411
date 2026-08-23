@@ -2,7 +2,7 @@
   import L from 'leaflet'
   import 'leaflet/dist/leaflet.css'
   import { onMount, tick } from 'svelte'
-  import { ArrowLeft, Star, Gift, MapPin, Clock, Info } from '@lucide/svelte'
+  import { ArrowLeft, Star, Gift, MapPin, Clock, Info, ExternalLink } from '@lucide/svelte'
   import { t } from '../lib/i18n.svelte'
   import { navigate, getRouteParams } from '../stores/router.svelte'
   import api from '../lib/api'
@@ -48,15 +48,20 @@
   let map: L.Map | null = null
 
   let subscribing = $state(false)
+  let isSubscribed = $state(false)
 
   async function load() {
     try {
-      const data = await api.get<{ card: StoreCard; transactions: Tx[]; rewards: Reward[] }>(
-        `/api/client/cards/${merchantId}`,
-      )
+      const data = await api.get<{
+        card: StoreCard
+        transactions: Tx[]
+        rewards: Reward[]
+        isSubscribed: boolean
+      }>(`/api/client/cards/${merchantId}`)
       card = data.card
       transactions = data.transactions || []
       rewards = data.rewards || []
+      isSubscribed = data.isSubscribed ?? false
     } catch {}
     loading = false
     await tick()
@@ -114,6 +119,26 @@
   function isEarned(type: string) {
     return type === 'ADD_POINTS' || type === 'ADD_MEAL_VOUCHER'
   }
+
+  function isIOS(): boolean {
+    if (typeof navigator === 'undefined') return false
+    const ua = navigator.userAgent
+    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1)
+  }
+
+  let mapsUrl = $derived.by(() => {
+    const c = card
+    if (!c) return ''
+    const lat = c.merchantLat
+    const lng = c.merchantLng
+    const coords = typeof lat === 'number' && typeof lng === 'number' ? `${lat},${lng}` : ''
+    const q = coords || c.merchantAddress?.trim() || ''
+    if (!q) return ''
+    const enc = encodeURIComponent(q)
+    return isIOS()
+      ? `https://maps.apple.com/?q=${enc}`
+      : `https://www.google.com/maps/search/?api=1&query=${enc}`
+  })
 </script>
 
 <main class="pb-28 px-4 pt-4 max-w-lg mx-auto">
@@ -146,26 +171,29 @@
       {/if}
     </div>
 
-    <div class="grid grid-cols-2 gap-3 mb-4">
-      <div class="card p-4 text-center animate-slide-up">
-        <p class="text-xs text-on-surface-variant mb-1">{t('cards.balance_points')}</p>
-        <p class="text-2xl font-bold text-primary">{card.fidelityPoints}</p>
-        <p class="text-[10px] text-on-surface-variant">{t('transactions.fidelity')}</p>
-      </div>
-      <div class="card p-4 text-center animate-slide-up" style="animation-delay: 40ms">
-        <p class="text-xs text-on-surface-variant mb-1">{t('cards.balance_meal')}</p>
-        <p class="text-2xl font-bold text-primary">{formatTND(card.mealVoucherBalance)}</p>
-        <p class="text-[10px] text-on-surface-variant">TND {t('transactions.meal')}</p>
-      </div>
-    </div>
-
-    {#if typeof card.merchantLat === 'number' && typeof card.merchantLng === 'number'}
-      <div class="card p-3 mb-4 animate-slide-up">
-        <div class="flex items-center gap-2 mb-2 text-sm font-semibold">
-          <MapPin size={16} class="text-primary" />
-          {t('cards.location')}
+    {#if isSubscribed}
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <div class="card p-4 text-center animate-slide-up">
+          <p class="text-xs text-on-surface-variant mb-1">{t('cards.balance_points')}</p>
+          <p class="text-2xl font-bold text-primary">{card.fidelityPoints}</p>
+          <p class="text-[10px] text-on-surface-variant">{t('transactions.fidelity')}</p>
         </div>
-        <div class="h-56 rounded-xl overflow-hidden border border-outline isolate" bind:this={mapEl}></div>
+        <div class="card p-4 text-center animate-slide-up" style="animation-delay: 40ms">
+          <p class="text-xs text-on-surface-variant mb-1">{t('cards.balance_meal')}</p>
+          <p class="text-2xl font-bold text-primary">{formatTND(card.mealVoucherBalance)}</p>
+          <p class="text-[10px] text-on-surface-variant">TND {t('transactions.meal')}</p>
+        </div>
+      </div>
+    {:else}
+      <div class="card p-4 text-center mb-4 animate-slide-up">
+        <p class="text-sm text-on-surface-variant mb-3">{t('cards.subscribe_prompt')}</p>
+        <button
+          onclick={subscribeToMerchant}
+          disabled={subscribing}
+          class="btn btn-primary w-full disabled:opacity-50"
+        >
+          {subscribing ? t('common.loading') : t('partners.subscribe')}
+        </button>
       </div>
     {/if}
 
@@ -202,6 +230,26 @@
         </div>
       {/if}
     </div>
+
+    {#if typeof card.merchantLat === 'number' && typeof card.merchantLng === 'number'}
+      <div class="card p-3 mb-4 animate-slide-up">
+        <div class="flex items-center gap-2 mb-2 text-sm font-semibold">
+          <MapPin size={16} class="text-primary" />
+          {t('cards.location')}
+        </div>
+        <div class="h-56 rounded-xl overflow-hidden border border-outline isolate" bind:this={mapEl}></div>
+        {#if mapsUrl}
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-secondary w-full mt-3"
+          >
+            <ExternalLink size={16} class="mr-2" />{t('business.profile.view_on_maps')}
+          </a>
+        {/if}
+      </div>
+    {/if}
 
     <h2 class="text-sm font-semibold mb-3">{t('card.history')}</h2>
     {#if transactions.length === 0}

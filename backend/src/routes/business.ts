@@ -4,7 +4,7 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { db } from '../db'
 import { env } from '../config/env'
-import { merchants, merchantStaff, rewards, authUsers, user, stampTransactions } from '../db/schema'
+import { merchants, merchantStaff, rewards, authUsers, user, stampTransactions, merchantPublic } from '../db/schema'
 import { requireAuth } from '../middleware/auth'
 import { requireRole } from '../middleware/requireRole'
 import { getMerchantDashboard, getMerchantCustomers, getMerchantTransactions } from '../services/analytics'
@@ -344,6 +344,6 @@ businessRoutes.patch('/settings', zValidator('json', settingsSchema), async (c) 
   const body = c.req.valid('json')
   await db.update(merchants).set({ ...body, updatedAt: new Date() }).where(eq(merchants.id, staff.merchantId))
 
-  const [updated] = await db.select().from(merchants).where(eq(merchants.id, staff.merchantId)).limit(1)
+  const [updated] = await db.select(merchantPublic).from(merchants).where(eq(merchants.id, staff.merchantId)).limit(1)
   return c.json({ merchant: updated })
 })

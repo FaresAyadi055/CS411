@@ -78,6 +78,7 @@ const CREATE = [
     is_resolved INTEGER DEFAULT 0
   )`,
   `CREATE INDEX IF NOT EXISTS rate_limit_ip_idx ON rate_limit_log (ip_address)`,
+  `CREATE INDEX IF NOT EXISTS rate_limit_triggered_idx ON rate_limit_log (triggered_at)`,
   `CREATE TABLE IF NOT EXISTS apikey (
     id TEXT PRIMARY KEY,
     config_id TEXT NOT NULL,
@@ -233,15 +234,8 @@ const ALTERS = [
 async function main() {
   let client: ReturnType<typeof createClient>
 
-  const tursoUrl = process.env.TURSO_SQLITE_DATABASE_URL
-  const tursoToken = process.env.TURSO_TOKEN
   const localDbPath = process.env.LOCAL_DB_PATH ?? 'file:../database/app.db'
-
-  if (tursoUrl && tursoToken) {
-    client = createClient({ url: tursoUrl, authToken: tursoToken })
-  } else {
-    client = createClient({ url: localDbPath })
-  }
+  client = createClient({ url: localDbPath })
 
   console.log('Creating tables...')
   for (const sql of CREATE) {

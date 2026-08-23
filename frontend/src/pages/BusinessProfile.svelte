@@ -5,7 +5,8 @@
   import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
   import markerShadow from 'leaflet/dist/images/marker-shadow.png'
   import { onMount, tick } from 'svelte'
-  import { Save, Upload, X, LocateFixed } from '@lucide/svelte'
+  import { Save, Upload, X, LocateFixed, Copy, Download } from '@lucide/svelte'
+  import QRCode from 'qrcode'
   import { t } from '../lib/i18n.svelte'
   import api from '../lib/api'
   import { showToast } from '../stores/toast.svelte'
@@ -232,6 +233,43 @@
       { enableHighAccuracy: true, timeout: 10000 },
     )
   }
+
+  let referralUrl = $derived(
+    merchant ? `${typeof window !== 'undefined' ? window.location.origin : ''}/?ref=${merchant.slug}` : '',
+  )
+  let referralQr = $state('')
+
+  $effect(() => {
+    const url = referralUrl
+    if (!url) return
+    QRCode.toDataURL(url, { width: 256, margin: 2, color: { dark: '#000000', light: '#FFFFFF' } })
+      .then((uri) => {
+        referralQr = uri
+      })
+      .catch(() => {
+        referralQr = ''
+      })
+  })
+
+  async function copyLink() {
+    if (!referralUrl) return
+    try {
+      await navigator.clipboard.writeText(referralUrl)
+      showToast('success', t('common.copied'))
+    } catch {
+      showToast('error', 'Failed to copy link')
+    }
+  }
+
+  function downloadQr() {
+    if (!referralQr) return
+    const a = document.createElement('a')
+    a.href = referralQr
+    a.download = `fidelito-${merchant?.slug ?? 'referral'}.png`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
 </script>
 
 <main class="pb-28 px-4 pt-4 max-w-lg mx-auto">
@@ -340,6 +378,32 @@
         <Save size={18} class="mr-2" />
         {saving ? t('common.saving') : t('common.save')}
       </button>
+    </div>
+
+    <div class="card p-4 space-y-3 mt-4 animate-slide-up">
+      <div>
+        <h2 class="font-semibold">{t('business.profile.referral_title')}</h2>
+        <p class="text-xs text-on-surface-variant mt-1">{t('business.profile.referral_desc')}</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <input
+          type="text"
+          readonly
+          value={referralUrl}
+          onfocus={(e) => (e.target as HTMLInputElement).select()}
+          class="input-field text-xs" />
+        <button onclick={copyLink} class="btn btn-secondary shrink-0" aria-label={t('business.profile.copy_link')}>
+          <Copy size={16} class="mr-1" />{t('business.profile.copy_link')}
+        </button>
+      </div>
+      <div class="flex flex-col items-center pt-2">
+        {#if referralQr}
+          <img src={referralQr} alt="Referral QR code" class="w-48 h-48 rounded-xl border border-outline bg-white p-2" />
+        {/if}
+        <button onclick={downloadQr} class="btn btn-secondary mt-3" disabled={!referralQr}>
+          <Download size={16} class="mr-1" />{t('business.profile.download_png')}
+        </button>
+      </div>
     </div>
   {/if}
 </main>
