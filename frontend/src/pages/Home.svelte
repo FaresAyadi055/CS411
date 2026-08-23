@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { QrCode, ScanLine, Gift, BarChart3, ArrowRight, Mail, Phone, Check, Sparkles } from '@lucide/svelte'
+  import { QrCode, ScanLine, Gift, BarChart3, ArrowRight, Mail, Phone, Check, Sparkles, Download } from '@lucide/svelte'
   import { t } from '../lib/i18n.svelte'
   import { navigate } from '../stores/router.svelte'
   import StarBadge from '../components/StarBadge.svelte'
   import PartnersCarousel from '../components/PartnersCarousel.svelte'
+  import { pwa, promptInstall } from '../lib/pwa.svelte'
 
   const features = [
     { icon: QrCode, key: 'qr' },
@@ -13,13 +14,19 @@
   ]
 
   const stampSlots = [true, true, true, true, true, true, false, false]
+
+  async function installApp() {
+    await promptInstall()
+  }
 </script>
 
 <main class="pb-2 lg:pb-8 overflow-x-hidden">
-  <section class="relative mx-4 mt-3 overflow-hidden rounded-2xl min-h-[280px] sm:min-h-[320px] lg:mx-6 lg:mt-5 lg:min-h-[420px] lg:rounded-[2rem] bg-gradient-to-br from-primary to-primary-container lg:grid lg:grid-cols-2 lg:items-center lg:gap-6">
-    <div class="absolute inset-0 opacity-25" style="background-image: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.35) 0, transparent 40%), radial-gradient(circle at 80% 60%, rgba(255,255,255,0.25) 0, transparent 45%);"></div>
-    <div class="absolute -top-12 -right-10 w-40 h-40 rounded-full bg-white/10 blur-2xl pointer-events-none"></div>
-    <div class="absolute -bottom-16 -left-12 w-52 h-52 rounded-full bg-white/10 blur-2xl pointer-events-none"></div>
+  <section class="relative mx-4 mt-3 overflow-hidden rounded-2xl min-h-[280px] sm:min-h-[320px] lg:mx-6 lg:mt-5 lg:min-h-[420px] lg:rounded-[2rem] aurora-flow lg:grid lg:grid-cols-2 lg:items-center lg:gap-6">
+    <div class="absolute inset-0 overflow-hidden">
+      <div class="aurora aurora-1 -top-24 -left-16 h-72 w-72 bg-[#6cf8bb] opacity-50"></div>
+      <div class="aurora aurora-2 -top-10 -right-20 h-80 w-80 bg-[#00b37a] opacity-50"></div>
+      <div class="aurora aurora-3 -bottom-28 left-1/4 h-72 w-72 bg-[#9ff5cd] opacity-40"></div>
+    </div>
 
     <div class="relative z-10 px-5 pt-12 pb-8 sm:pt-16 text-center text-white lg:px-12 lg:py-16 lg:text-start">
       <span class="badge inline-flex gap-1.5 bg-white/10 text-white animate-fade-in-up" style="animation-delay: 0ms">
@@ -43,6 +50,17 @@
           {t('auth.sign.in')}
         </button>
       </div>
+      {#if !pwa.installed}
+        <div class="mt-3 flex justify-center animate-fade-in-up" style="animation-delay: 400ms">
+          <button
+            onclick={installApp}
+            class="inline-flex items-center gap-2 text-white font-semibold underline"
+          >
+            <Download size={16} />
+            {t('qr.install.title')}
+          </button>
+        </div>
+      {/if}
     </div>
 
     <div class="relative z-10 flex justify-center px-6 pb-10 pt-2 sm:pb-14 lg:pb-0 lg:pt-0">

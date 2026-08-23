@@ -30,12 +30,28 @@ function writeStamp(key: string, value: number) {
   if (typeof localStorage !== 'undefined') localStorage.setItem(key, String(value))
 }
 
+function readInstalled(): boolean {
+  return typeof localStorage !== 'undefined' && localStorage.getItem('pwa_installed') === '1'
+}
+
+function writeInstalled(value: boolean) {
+  if (typeof localStorage !== 'undefined') localStorage.setItem('pwa_installed', value ? '1' : '0')
+}
+
 export function initPwa() {
   if (typeof window === 'undefined') return
-  pwa.installed =
+  const isStandalone =
     window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: minimal-ui)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
     (navigator as any).standalone === true ||
     document.referrer.startsWith('android-app://')
+  if (isStandalone) {
+    pwa.installed = true
+    writeInstalled(true)
+  } else {
+    pwa.installed = pwa.isIos ? false : readInstalled()
+  }
   pwa.isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream
   pwa.notifPermission = typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   pwa.installAskedAt = readStamp('pwa_install_asked')
@@ -44,9 +60,12 @@ export function initPwa() {
   window.addEventListener('beforeinstallprompt', (e: Event) => {
     e.preventDefault()
     pwa.deferredPrompt = e
+    pwa.installed = false
+    writeInstalled(false)
   })
   window.addEventListener('appinstalled', () => {
     pwa.installed = true
+    writeInstalled(true)
     pwa.deferredPrompt = null
   })
   if (typeof Notification !== 'undefined') {
@@ -93,6 +112,7 @@ export async function promptInstall(): Promise<'accepted' | 'dismissed' | null> 
     markInstallAsked()
     if (choice.outcome === 'accepted') {
       pwa.installed = true
+      writeInstalled(true)
       return 'accepted'
     }
     return 'dismissed'

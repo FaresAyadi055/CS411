@@ -1,11 +1,16 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
-  import { QrCode, RefreshCw, Zap, Lock } from '@lucide/svelte'
+  import { QrCode, RefreshCw, Zap, Lock, Download } from '@lucide/svelte'
   import QRCode from 'qrcode'
   import { t } from '../lib/i18n.svelte'
   import api from '../lib/api'
   import { generateTotp, buildQrPayload } from '../lib/totp'
   import { getUser } from '../stores/auth.svelte'
+  import { pwa, promptInstall } from '../lib/pwa.svelte'
+
+  async function installApp() {
+    await promptInstall()
+  }
 
   const PERIOD = 30
   const QR_SECRET_KEY = 'fidelito_qr_secret'
@@ -219,7 +224,19 @@
       <QrCode size={28} class="text-primary" />
     </div>
     <h1 class="text-xl font-bold">{t('qr.title')}</h1>
-    <p class="text-sm text-on-surface-variant mt-1">{t('qr.subtitle')}</p>
+    {#if !pwa.installed}
+      <p class="text-sm text-on-surface-variant mt-1 flex items-center justify-center gap-1">
+        <Download size={13} class="text-primary" />
+        <!-- svelte-ignore a11y_invalid_attribute -->
+        <a
+          href="#"
+          onclick={(e) => { e.preventDefault(); installApp() }}
+          class="text-primary underline font-semibold"
+        >{t('qr.install.title')}</a>
+      </p>
+    {:else}
+      <p class="text-sm text-on-surface-variant mt-1">{t('qr.subtitle')}</p>
+    {/if}
   </div>
 
   {#if loading}
@@ -266,7 +283,7 @@
         </div>
       </div>
 
-      <p class="text-xs text-on-surface-variant mt-4">Show this code to the cashier when checking out.</p>
+      <p class="text-xs text-on-surface-variant mt-4">{t('qr.cashier_hint')}</p>
     </div>
 
     <div class="flex justify-center mt-4">
