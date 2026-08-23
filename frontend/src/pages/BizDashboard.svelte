@@ -3,7 +3,7 @@
   import {
     TrendingUp, TrendingDown, Minus, Users, Gift, Coins, UtensilsCrossed,
     Repeat2, Clock, RefreshCw, ArrowUpRight, Trophy,
-    AlertCircle, Sparkles,
+    AlertCircle, Sparkles, X,
   } from '@lucide/svelte'
   import { t } from '../lib/i18n.svelte'
   import api, { invalidateCache } from '../lib/api'
@@ -19,7 +19,11 @@
 
   let stats = $state<DashboardStats | null>(null)
   let loading = $state(true)
-  let showAllTopCustomers = $state(false)
+  let showTopCustomersModal = $state(false)
+  let showCustomersModal = $state(false)
+  let customersList = $state<any[]>([])
+  let customersLoading = $state(false)
+  let customersCursor = $state<number | null>(null)
   let refreshing = $state(false)
   let loadError = $state(false)
   let period = $state<7 | 14 | 30>(14)
@@ -48,6 +52,31 @@
     await loadData(period)
     mounted = true
   })
+
+  async function loadCustomers(loadMore = false) {
+    if (customersLoading) return
+    customersLoading = true
+    try {
+      const url = `/api/business/customers?limit=20${customersCursor ? `&cursor=${customersCursor}` : ''}`
+      const data = await api.get<{ customers: any[] }>(url)
+      if (loadMore) {
+        customersList = [...customersList, ...data.customers]
+      } else {
+        customersList = data.customers
+      }
+      if (data.customers.length > 0) {
+        customersCursor = data.customers[data.customers.length - 1].lastVisitAt
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    customersLoading = false
+  }
+
+  function openCustomersModal() {
+    showCustomersModal = true
+    if (customersList.length === 0) loadCustomers()
+  }
 
   async function changePeriod(p: 7 | 14 | 30) {
     if (p === period) return
@@ -302,7 +331,10 @@
           <Users size={16} class="text-primary" />
         </div>
         <p class="text-2xl font-bold tabular-nums" use:countUp={stats.uniqueCustomers}>0</p>
-        <p class="text-xs text-on-surface-variant mt-0.5">{t('dashboard.customers')}</p>
+        <div class="flex items-center justify-between mt-1">
+          <p class="text-xs text-on-surface-variant">{t('dashboard.customers')}</p>
+          <button class="text-xs text-primary font-medium" onclick={openCustomersModal}>{t('common.view')}</button>
+        </div>
         {#if stats.newCustomersThisWeek > 0}
           <p class="text-[11px] text-found-text font-medium mt-1">{t('dashboard.new_this_week', { count: String(stats.newCustomersThisWeek) })}</p>
         {/if}
@@ -461,17 +493,10 @@
     {/if}
 
     <!-- Top customers -->
-    <h2 class="text-sm font-semibold mb-3 flex items-center justify-between">
-      <div class="flex items-center gap-1.5"><Trophy size={14} class="text-primary" />{t('dashboard.top_customers')}</div>
-      {#if stats.topCustomers.length > 5}
-        <button class="text-xs text-primary" onclick={() => showAllTopCustomers = !showAllTopCustomers}>
-          {showAllTopCustomers ? t('dashboard.show_less') : t('dashboard.view_full_list')}
-        </button>
-      {/if}
-    </h2>
+    <h2 class="text-sm font-semibold mb-3 flex items-center gap-1.5"><Trophy size={14} class="text-primary" />{t('dashboard.top_customers')}</h2>
     {#if stats.topCustomers.length > 0}
-      <div class="card divide-y divide-outline mb-6" class:max-h-96={showAllTopCustomers} class:overflow-y-auto={showAllTopCustomers}>
-        {#each (showAllTopCustomers ? stats.topCustomers : stats.topCustomers.slice(0, 5)) as c, i}
+      <div class="card divide-y divide-outline mb-6">
+        {#each stats.topCustomers.slice(0, 5) as c, i}
           <div class="flex items-center gap-3 p-3 animate-slide-up" style="animation-delay: {420 + i * 50}ms">
             <div class="w-6 text-center shrink-0">
               {#if i < 3}
@@ -493,6 +518,11 @@
           </div>
         {/each}
       </div>
+      {#if stats.topCustomers.length > 5}
+        <button class="text-sm text-primary font-medium mb-6 block w-full text-center" onclick={() => showTopCustomersModal = true}>
+          {t('dashboard.view_all')}
+        </button>
+      {/if}
     {:else}
       <div class="card p-6 text-center mb-6">
         <p class="text-sm text-on-surface-variant">{t('dashboard.no_customers')}</p>
@@ -540,5 +570,74 @@
         <p class="text-xs text-on-surface-variant mt-1">{t('dashboard.no_activity_desc')}</p>
       </div>
     {/if}
+  {/if}
+
+  {#if showTopCustomersModal}
+    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div class="card bg-surface w-full max-w-lg max-h-[80vh] flex flex-col p-4">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">{t('dashboard.top_customers')}</h2>
+          <button class="text-on-surface-variant" onclick={() => showTopCustomersModal = false} aria-label={t('common.dismiss')}>
+             <X size={18} />
+          </button>
+        </div>
+        <div class="flex-1 overflow-y-auto divide-y divide-outline">
+          {#each stats.topCustomers as c, i}
+            <div class="flex items-center gap-3 p-3">
+              <div class="w-6 text-center shrink-0">
+                {#if i < 3}
+                  <span class="text-base" title={t('dashboard.rank')}>{i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}</span>
+                {:else}
+                  <span class="text-xs font-semibold text-on-surface-variant">{i + 1}</span>
+                {/if}
+              </div>
+              <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                {initials(c.firstName, c.lastName)}
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium truncate">{c.firstName || ''} {c.lastName || ''}</p>
+                <p class="text-xs text-on-surface-variant">{c.lifetimePoints} {t('dashboard.points')}</p>
+              </div>
+              <div class="text-right shrink-0">
+                <p class="text-sm font-semibold text-primary">{c.fidelityPoints}</p>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  {#if showCustomersModal}
+    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div class="card bg-surface w-full max-w-lg max-h-[80vh] flex flex-col p-4">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">{t('dashboard.customers')}</h2>
+          <button class="text-on-surface-variant" onclick={() => showCustomersModal = false} aria-label={t('common.dismiss')}>
+             <X size={18} />
+          </button>
+        </div>
+        <div class="flex-1 overflow-y-auto divide-y divide-outline">
+          {#each customersList as c}
+            <div class="flex items-center justify-between py-3">
+              <div>
+                <p class="text-sm font-medium">{c.firstName || ''} {c.lastName || ''}</p>
+                <p class="text-xs text-on-surface-variant">{c.email}</p>
+              </div>
+              <div class="text-right">
+                <p class="text-sm font-semibold text-primary">{c.fidelityPoints} {t('dashboard.points')}</p>
+              </div>
+            </div>
+          {/each}
+          {#if customersLoading}
+            <p class="text-sm text-center py-4">{t('common.loading')}</p>
+          {:else if customersList.length > 0}
+            <button class="w-full text-sm text-primary py-3" onclick={() => loadCustomers(true)}>
+              {t('common.load_more')}
+            </button>
+          {/if}
+        </div>
+      </div>
+    </div>
   {/if}
 </main>
