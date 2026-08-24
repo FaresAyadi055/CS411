@@ -1,11 +1,20 @@
-const CACHE = 'fidelito-v1'
-const CORE = ['/', '/index.html', '/favicon.svg', '/manifest.json']
+const CACHE = 'fidelito-v2'
+const CORE = ['/', '/index.html', '/favicon.svg', '/icon.svg', '/manifest.json']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((cache) => cache.addAll(CORE))
+      .then(async (cache) => {
+        await cache.addAll(CORE).catch(() => {})
+        try {
+          const html = await (await fetch('/index.html')).text()
+          const urls = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1])
+          if (urls.length) await cache.addAll(urls).catch(() => {})
+        } catch (e) {
+          /* non-fatal */
+        }
+      })
       .then(() => self.skipWaiting()),
   )
 })
@@ -19,6 +28,15 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+function isDevModule(url) {
+  return (
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/node_modules/') ||
+    url.pathname.includes('/@vite/') ||
+    url.search.includes('import')
+  )
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request
   if (req.method !== 'GET') return
@@ -26,6 +44,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url)
   if (url.origin !== self.location.origin) return
   if (url.pathname.startsWith('/api/')) return
+
+  if (isDevModule(url)) return
 
   if (req.mode === 'navigate') {
     event.respondWith(
@@ -36,7 +56,8 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.match(req).then((cached) => {
-      const network = fetch(req)
+      if (cached) return cached
+      return fetch(req)
         .then((res) => {
           if (res && res.status === 200 && res.type === 'basic') {
             const copy = res.clone()
@@ -45,7 +66,6 @@ self.addEventListener('fetch', (event) => {
           return res
         })
         .catch(() => cached)
-      return cached || network
     }),
   )
 })
