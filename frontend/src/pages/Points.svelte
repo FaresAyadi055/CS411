@@ -18,6 +18,14 @@
   let pct = $derived(funded > 0 ? Math.min(100, (given / funded) * 100) : 0)
   let lowBalance = $derived(balance <= 0)
 
+  const tiers = [
+    { points: 100, price: 0, perPoint: 0, free: true },
+    { points: 1000, price: 50, perPoint: 0.05, free: false },
+    { points: 3000, price: 135, perPoint: 0.045, free: false },
+    { points: 5000, price: 200, perPoint: 0.04, free: false },
+    { points: 10000, price: 350, perPoint: 0.035, free: false },
+  ]
+
   const R = 84
   const C = 2 * Math.PI * R
   let dash = $state(C)
@@ -124,6 +132,45 @@
       <p class="text-xs text-on-surface-variant mt-4 text-center">
         {t('points.given_of', { given: given.toLocaleString(), funded: funded.toLocaleString() })}
       </p>
+    </div>
+
+    <div class="card p-6 mt-4 animate-slide-up">
+      <h2 class="text-base font-bold">{t('points.pricing_title')}</h2>
+      <p class="text-xs text-on-surface-variant mt-1">{t('points.pricing_sub')}</p>
+
+      <div class="mt-4 overflow-hidden rounded-xl border border-outline">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-surface-container-low text-on-surface-variant">
+              <th class="text-start px-3 py-2 font-semibold">{t('points.col_points')}</th>
+              <th class="text-end px-3 py-2 font-semibold">{t('points.col_price')}</th>
+              <th class="text-end px-3 py-2 font-semibold">{t('points.col_per_point')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each tiers as tier}
+              <tr class="border-t border-outline {tier.free ? 'bg-primary/5' : ''}">
+                <td class="px-3 py-2.5 font-medium">
+                  {tier.points.toLocaleString()}
+                  {#if tier.free}
+                    <span class="ml-1 inline-block text-[10px] uppercase font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">{t('points.free_signup')}</span>
+                  {/if}
+                </td>
+                <td class="px-3 py-2.5 text-end">
+                  {#if tier.price === 0}
+                    <span class="font-semibold text-primary">{t('points.tier_free')}</span>
+                  {:else}
+                    {tier.price.toLocaleString()} {t('common.currency')}
+                  {/if}
+                </td>
+                <td class="px-3 py-2.5 text-end text-on-surface-variant">
+                  {tier.perPoint === 0 ? '—' : tier.perPoint.toFixed(3) + ' ' + t('common.currency')}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
     </div>
   {/if}
 </main>

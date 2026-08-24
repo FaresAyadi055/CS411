@@ -238,6 +238,8 @@ async function main() {
 
   const localDbPath = process.env.LOCAL_DB_PATH ?? 'file:../database/app.db'
   client = createClient({ url: localDbPath })
+  client.execute('PRAGMA journal_mode=WAL')
+  client.execute('PRAGMA busy_timeout=5000')
 
   console.log('Creating tables...')
   for (const sql of CREATE) {

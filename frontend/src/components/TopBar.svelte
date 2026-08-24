@@ -1,13 +1,19 @@
 <script lang="ts">
-  import { Settings, Store, Bell } from '@lucide/svelte'
+  import { Settings, Store, Bell, Coins } from '@lucide/svelte'
   import { navigate, getRoute } from '../stores/router.svelte'
   import { t } from '../lib/i18n.svelte'
   import { getUser } from '../stores/auth.svelte'
   import { notif, refreshUnread } from '../stores/notifications.svelte'
+  import { getBusinessPoints, refreshBusinessPoints } from '../stores/businessPoints.svelte'
   import Tooltip from './Tooltip.svelte'
 
+  const bizPoints = $derived(getBusinessPoints())
+
   $effect(() => {
-    if (getUser()) refreshUnread()
+    const u = getUser()
+    if (!u) return
+    refreshUnread()
+    if (u.role === 'business') refreshBusinessPoints()
   })
 </script>
 
@@ -21,6 +27,17 @@
     <div class="flex items-center gap-1 shrink-0">
       {#if getUser()}
         {#if getUser()?.role === 'business'}
+        <Tooltip text={t('points.balance')} position="bottom">
+          <button
+            onclick={() => navigate('points')}
+            class="flex items-center gap-1 h-8 px-2.5 rounded-full bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors"
+            aria-label={t('points.balance')}
+          >
+            <Coins size={15} class="text-primary" />
+            <span class="text-sm font-semibold tabular-nums">{bizPoints === null ? '—' : bizPoints.toLocaleString()}</span>
+          </button>
+        </Tooltip>
+
         <Tooltip text={t('business.profile.title')} position="bottom">
           <button
             onclick={() => navigate('business-profile')}

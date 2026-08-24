@@ -106,6 +106,11 @@
     }
   }
 
+  async function refreshPeriod() {
+    const ok = await computeLocalQr()
+    if (!ok) await fetchAndUpdate()
+  }
+
   function startClock() {
     clearTimer()
     countdown = remaining()
@@ -120,11 +125,7 @@
         lastPeriod = currentPeriod
         fading = true
         setTimeout(() => { fading = false }, 700)
-        if (!navigator.onLine || offline) {
-          await computeLocalQr()
-        } else {
-          await fetchAndUpdate()
-        }
+        await refreshPeriod()
       }
     }, 100)
   }
@@ -188,7 +189,7 @@
 
   async function handleOnline() {
     offline = false
-    if (provisioned) await fetchQr()
+    if (provisioned) await refreshPeriod()
   }
 
   function handleOffline() {

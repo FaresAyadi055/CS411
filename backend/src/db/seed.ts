@@ -10,6 +10,8 @@ async function main() {
   const localDbPath = process.env.LOCAL_DB_PATH ?? 'file:../database/app.db'
 
   const client = createClient({ url: localDbPath })
+  client.execute('PRAGMA journal_mode=WAL')
+  client.execute('PRAGMA busy_timeout=5000')
 
   const db = drizzle(client, { schema })
   const now = new Date()
