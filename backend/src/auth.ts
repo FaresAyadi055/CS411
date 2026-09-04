@@ -62,9 +62,10 @@ export function getAuth(): ReturnType<typeof betterAuth> {
     advanced: {
       cookies: {
         session_token: {
-          attributes: env.betterAuthUrl.startsWith('https://')
-            ? { sameSite: 'strict', secure: true }
-            : { sameSite: 'strict' },
+          attributes: {
+            sameSite: env.cookieSameSite,
+            secure: env.betterAuthUrl.startsWith('https://'),
+          },
         },
         oauth_state: {
           attributes: env.betterAuthUrl.startsWith('https://')

@@ -20,6 +20,7 @@ export interface CloudflareBindings {
   DISABLE_AUTH?: string
   FRONTEND_URL?: string
   USE_LOCAL_DB?: string
+  COOKIE_SAMESITE?: string
   VAPID_PUBLIC_KEY?: string
   VAPID_PRIVATE_KEY?: string
   VAPID_SUBJECT?: string
@@ -43,6 +44,7 @@ export const BINDING_KEYS = [
   'DISABLE_AUTH',
   'FRONTEND_URL',
   'USE_LOCAL_DB',
+  'COOKIE_SAMESITE',
   'VAPID_PUBLIC_KEY',
   'VAPID_PRIVATE_KEY',
   'VAPID_SUBJECT',
@@ -179,5 +181,10 @@ export const env = {
   },
   get vapidSubject() {
     return readBinding('VAPID_SUBJECT') ?? 'mailto:hello@fidelito.tn'
+  },
+  get cookieSameSite() {
+    const v = (readBinding('COOKIE_SAMESITE') ?? 'strict').toLowerCase()
+    if (v === 'lax' || v === 'none') return v
+    return 'strict'
   },
 }

@@ -9,6 +9,7 @@ dist-ssr/
 .env
 .env.local
 .env.production
+.env.prod
 .dev.vars
 
 # Logs
