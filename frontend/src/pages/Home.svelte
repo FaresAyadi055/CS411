@@ -44,7 +44,7 @@
           <ArrowRight size={16} class="ml-1 transition-transform group-hover:translate-x-0.5" />
         </button>
         <button
-          onclick={() => navigate('login')}
+          onclick={() => navigate('register')}
           class="btn bg-white/15 border border-white/30 text-white hover:bg-white/25"
         >
           {t('auth.sign.in')}

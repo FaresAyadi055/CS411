@@ -107,7 +107,7 @@
 
     <div class="card p-6">
       {#if step === 'email'}
-        <button onclick={() => navigate('login')} class="flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface mb-4">
+        <button onclick={() => navigate('register')} class="flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface mb-4">
           <ArrowLeft size={16} />
           {t('auth.otp.back')}
         </button>
@@ -240,7 +240,7 @@
           <h2 class="text-lg font-bold tracking-tight mb-1">{t('auth.reset.done.title')}</h2>
           <p class="text-sm text-on-surface-variant mb-6">{t('auth.reset.done.desc')}</p>
           <button
-            onclick={() => navigate('login')}
+            onclick={() => navigate('register')}
             class="btn btn-primary w-full"
           >
             {t('auth.sign.in')}

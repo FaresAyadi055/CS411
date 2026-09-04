@@ -1,6 +1,5 @@
 export type Route =
   | 'home'
-  | 'login'
   | 'register'
   | 'forgot-password'
   | 'about'
@@ -22,7 +21,7 @@ export type Route =
   | 'points'
 
 const NAMED_ROUTES: Route[] = [
-  'home', 'login', 'register', 'forgot-password', 'about',
+  'home', 'register', 'forgot-password', 'about',
   'settings', 'oauth-callback', 'qr', 'cards', 'scan',
   'dashboard', 'staff', 'rewards', 'business-profile', 'partners', 'transactions', 'notifications', 'points',
 ]
@@ -39,6 +38,10 @@ function parseLocation(): { route: Route; params: Record<string, string> } {
 
   const parts = hash.split('/')
   const base = parts[0] || 'home'
+
+  if (base === 'login') {
+    return { route: 'register', params: {} }
+  }
 
   if (base === 'admin') {
     return { route: 'admin', params: { section: parts[1] || 'overview' } }

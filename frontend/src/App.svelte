@@ -7,7 +7,6 @@
   import { syncViewMode } from './stores/mode.svelte'
   import api, { setOnRequestError } from './lib/api'
   import Home from './pages/Home.svelte'
-  import Login from './pages/Login.svelte'
   import Register from './pages/Register.svelte'
   import ForgotPassword from './pages/ForgotPassword.svelte'
   import Settings from './pages/Settings.svelte'
@@ -57,7 +56,7 @@
     } catch {}
   }
 
-  const noNavRoutes = ['login', 'register', 'forgot-password', 'oauth-callback', 'not-found']
+  const noNavRoutes = ['register', 'forgot-password', 'oauth-callback', 'not-found']
 
   function showTopBar() {
     return !noNavRoutes.includes(getRoute())
@@ -124,8 +123,6 @@
 
     {#if getRoute() === 'home'}
       <Home />
-    {:else if getRoute() === 'login'}
-      <Login />
     {:else if getRoute() === 'register'}
       <Register />
     {:else if getRoute() === 'forgot-password'}
@@ -136,85 +133,85 @@
       {#if getUser()}
         <Settings />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'admin'}
       {#if getUser()}
         <AdminDashboard />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'qr'}
       {#if getUser()}
         <Qr />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'cards'}
       {#if getUser()}
         <Cards />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'card'}
       {#if getUser()}
         <CardDetail />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'scan'}
       {#if getUser()}
         <Scan />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'dashboard'}
       {#if getUser()}
         <BizDashboard />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'staff'}
       {#if getUser()}
         <Staff />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'rewards'}
       {#if getUser()}
         <Rewards />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'business-profile'}
       {#if getUser()}
         <BusinessProfile />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'transactions'}
       {#if getUser()}
         <Transactions />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'partners'}
       {#if getUser()}
         <Partners />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'notifications'}
       {#if getUser()}
         <Notifications />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'points'}
       {#if getUser()}
         <Points />
       {:else}
-        <Login />
+        <Register />
       {/if}
     {:else if getRoute() === 'oauth-callback'}
       <OAuthCallback />
