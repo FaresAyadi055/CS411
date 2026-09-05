@@ -236,7 +236,7 @@ export function installDemoFetch() {
     }
 
     if (method === 'GET' && path === '/api/business/dashboard') {
-      return json({ stats: DEMO_DASHBOARD })
+      return json({ dashboard: DEMO_DASHBOARD })
     }
 
     if (method === 'GET' && path === '/api/business/customers') {
