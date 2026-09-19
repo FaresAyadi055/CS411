@@ -74,7 +74,6 @@ businessRoutes.get('/staff', async (c) => {
     .select({
       cashierId: stampTransactions.cashierId,
       pointsAwarded: sql<number>`coalesce(sum(case when ${stampTransactions.balanceType} = 'fidelity' and ${stampTransactions.type} = 'ADD_POINTS' then ${stampTransactions.amount} else 0 end), 0)`,
-      mealAwarded: sql<number>`coalesce(sum(case when ${stampTransactions.balanceType} = 'meal_voucher' and ${stampTransactions.type} = 'ADD_MEAL_VOUCHER' then ${stampTransactions.amount} else 0 end), 0)`,
       transactionCount: sql<number>`coalesce(count(*), 0)`,
     })
     .from(stampTransactions)
@@ -89,7 +88,6 @@ businessRoutes.get('/staff', async (c) => {
     return {
       ...s,
       pointsAwarded: st ? Number(st.pointsAwarded) : 0,
-      mealAwarded: st ? Number(st.mealAwarded) : 0,
       transactionCount: st ? Number(st.transactionCount) : 0,
     }
   })
@@ -126,17 +124,16 @@ businessRoutes.post('/staff/recruit', zValidator('json', recruitSchema), async (
     id: crypto.randomUUID(),
     merchantId: staff.merchantId,
     userId: targetUserId,
-    role: 'cashier',
+    role: 'business',
   })
   await getOrCreateCard(targetUserId, staff.merchantId)
-  await db.update(user).set({ role: 'cashier' }).where(eq(user.id, targetUserId))
+  await db.update(user).set({ role: 'business' }).where(eq(user.id, targetUserId))
 
   return c.json({ success: true })
 })
 
 const addStaffSchema = z.object({
   email: z.string().email(),
-  role: z.enum(['owner', 'cashier']).default('cashier'),
 })
 
 businessRoutes.post('/staff', zValidator('json', addStaffSchema), async (c) => {
@@ -144,7 +141,7 @@ businessRoutes.post('/staff', zValidator('json', addStaffSchema), async (c) => {
   const staff = await getMerchantForUser(userId)
   if (!staff) return c.json({ error: 'No merchant found', code: 'NO_MERCHANT' }, 404)
 
-  const { email, role } = c.req.valid('json')
+  const { email } = c.req.valid('json')
 
   const [targetUser] = await db
     .select({ id: authUsers.id })
@@ -160,14 +157,13 @@ businessRoutes.post('/staff', zValidator('json', addStaffSchema), async (c) => {
     .limit(1)
   if (existing) return c.json({ error: 'Already staff', code: 'ALREADY_STAFF' }, 409)
 
-  const targetRole = role === 'owner' ? 'business' : 'cashier'
-  await db.update(user).set({ role: targetRole }).where(eq(user.id, targetUser.id))
+  await db.update(user).set({ role: 'business' }).where(eq(user.id, targetUser.id))
 
   await db.insert(merchantStaff).values({
     id: crypto.randomUUID(),
     merchantId: staff.merchantId,
     userId: targetUser.id,
-    role,
+    role: 'business',
   })
   await getOrCreateCard(targetUser.id, staff.merchantId)
 
@@ -190,7 +186,7 @@ businessRoutes.delete('/staff/:userId', async (c) => {
 })
 
 const updateStaffSchema = z.object({
-  role: z.enum(['owner', 'cashier']),
+  role: z.enum(['business']),
 })
 
 businessRoutes.patch('/staff/:userId', zValidator('json', updateStaffSchema), async (c) => {
@@ -213,8 +209,7 @@ businessRoutes.patch('/staff/:userId', zValidator('json', updateStaffSchema), as
     .set({ role })
     .where(eq(merchantStaff.id, targetStaff.id))
 
-  const targetRole = role === 'owner' ? 'business' : 'cashier'
-  await db.update(user).set({ role: targetRole }).where(eq(user.id, targetUserId))
+  await db.update(user).set({ role: 'business' }).where(eq(user.id, targetUserId))
 
   return c.json({ success: true })
 })
@@ -330,9 +325,6 @@ const settingsSchema = z.object({
   name: z.string().min(1).optional(),
   stampsPerReward: z.number().int().positive().optional(),
   logoUrl: z.string().url().nullable().optional(),
-  lat: z.number().min(-90).max(90).nullable().optional(),
-  lng: z.number().min(-180).max(180).nullable().optional(),
-  address: z.string().max(500).nullable().optional(),
 })
 
 businessRoutes.patch('/settings', zValidator('json', settingsSchema), async (c) => {

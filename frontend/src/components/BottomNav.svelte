@@ -23,11 +23,8 @@
       return [{ route: 'admin', icon: ShieldCheck, labelKey: 'nav.admin', params: { section: 'overview' } }]
     }
 
-    const canSwitch = user.role === 'business' || user.role === 'cashier'
-
-    if (canSwitch && isClientView()) {
+    if (user.role === 'business' && isClientView()) {
       return [
-        { route: 'partners', icon: Building2, labelKey: 'nav.partners' },
         { route: 'qr', icon: QrCode, labelKey: 'nav.qr' },
         { route: 'cards', icon: CreditCard, labelKey: 'nav.cards' },
         { route: 'transactions', icon: Receipt, labelKey: 'nav.transactions' },
@@ -40,21 +37,11 @@
         { route: 'scan', icon: ScanLine, labelKey: 'nav.scan' },
         { route: 'dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
         { route: 'rewards', icon: Gift, labelKey: 'nav.rewards' },
-        { route: 'staff', icon: Users, labelKey: 'nav.staff' },
-        { route: 'switch', icon: ArrowLeftRight, labelKey: 'nav.switch_client', switch: true },
-      ]
-    }
-
-    if (user.role === 'cashier') {
-      return [
-        { route: 'scan', icon: ScanLine, labelKey: 'nav.scan' },
-        { route: 'points', icon: Coins, labelKey: 'nav.points', counter: true },
         { route: 'switch', icon: ArrowLeftRight, labelKey: 'nav.switch_client', switch: true },
       ]
     }
 
     return [
-      { route: 'partners', icon: Building2, labelKey: 'nav.partners' },
       { route: 'qr', icon: QrCode, labelKey: 'nav.qr' },
       { route: 'cards', icon: CreditCard, labelKey: 'nav.cards' },
       { route: 'transactions', icon: Receipt, labelKey: 'nav.transactions' },
@@ -67,7 +54,7 @@
       toggleClientView()
       if (wasClient) {
         const user = getUser()
-        navigate(user?.role === 'cashier' ? 'scan' : 'dashboard')
+        navigate(user?.role === 'business' ? 'scan' : 'dashboard')
       } else {
         navigate('qr')
       }

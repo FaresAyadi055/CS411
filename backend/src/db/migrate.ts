@@ -127,7 +127,7 @@ const CREATE = [
     id TEXT PRIMARY KEY,
     merchant_id TEXT NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-    role TEXT NOT NULL DEFAULT 'cashier',
+    role TEXT NOT NULL DEFAULT 'business',
     created_at INTEGER NOT NULL,
     UNIQUE(merchant_id, user_id)
   )`,
@@ -231,6 +231,8 @@ const ALTERS = [
   `ALTER TABLE "user" ADD COLUMN phone TEXT`,
   `ALTER TABLE merchants RENAME COLUMN monthly_point_cap TO points_balance`,
   `ALTER TABLE merchants RENAME COLUMN points_used_month TO points_funded`,
+  `ALTER TABLE customer_cards ADD COLUMN fidelity_points INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE customer_cards ADD COLUMN lifetime_points INTEGER NOT NULL DEFAULT 0`,
 ]
 
 async function main() {

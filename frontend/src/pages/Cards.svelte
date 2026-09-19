@@ -66,7 +66,7 @@
           {/if}
           <div class="flex-1 min-w-0">
             <p class="font-semibold text-sm truncate">{card.merchantName || 'Partner'}</p>
-            <p class="text-xs text-on-surface-variant">{t('cards.points', { n: card.fidelityPoints.toString() })} &middot; {t('cards.meal_voucher', { n: card.mealVoucherBalance.toFixed(3) })}</p>
+            <p class="text-xs text-on-surface-variant">{t('cards.points', { n: card.fidelityPoints.toString() })}</p>
           </div>
           <ChevronRight size={18} class="text-on-surface-variant shrink-0" />
         </button>

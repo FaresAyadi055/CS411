@@ -1,23 +1,11 @@
 <script lang="ts">
-  import L from 'leaflet'
-  import 'leaflet/dist/leaflet.css'
-  import markerIcon from 'leaflet/dist/images/marker-icon.png'
-  import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
-  import markerShadow from 'leaflet/dist/images/marker-shadow.png'
-  import { onMount, tick } from 'svelte'
-  import { Save, Upload, X, LocateFixed, Copy, Download } from '@lucide/svelte'
+  import { onMount } from 'svelte'
+  import { Save, Upload, X, Copy, Download } from '@lucide/svelte'
   import QRCode from 'qrcode'
   import { t } from '../lib/i18n.svelte'
   import api from '../lib/api'
   import { showToast } from '../stores/toast.svelte'
   import type { Merchant } from '../lib/types'
-
-  delete (L.Icon.Default.prototype as any)._getIconUrl
-  L.Icon.Default.mergeOptions({
-    iconUrl: markerIcon,
-    iconRetinaUrl: markerIcon2x,
-    shadowUrl: markerShadow,
-  })
 
   let merchant = $state<Merchant | null>(null)
   let loading = $state(true)
@@ -25,15 +13,8 @@
   let name = $state('')
   let stampsPerReward = $state(10)
   let logoUrl = $state('')
-  let lat = $state<number | null>(null)
-  let lng = $state<number | null>(null)
-  let address = $state('')
-
   let uploading = $state(false)
   let fileInput = $state<HTMLInputElement | null>(null)
-  let mapContainer = $state<HTMLDivElement | null>(null)
-  let map: L.Map | null = null
-  let marker: L.Marker | null = null
 
   onMount(() => {
     ;(async () => {
@@ -43,62 +24,10 @@
         name = data.merchant.name
         stampsPerReward = data.merchant.stampsPerReward
         logoUrl = data.merchant.logoUrl || ''
-        lat = data.merchant.lat || null
-        lng = data.merchant.lng || null
-        address = data.merchant.address || ''
       } catch {}
       loading = false
-      await tick()
-      initMap()
     })()
-    return () => { map?.remove() }
   })
-
-  function initMap() {
-    if (!mapContainer) return
-    const hasPos = lat != null && lng != null
-    const clat = lat ?? 34.0
-    const clng = lng ?? 9.0
-    const center: [number, number] = [clat, clng]
-    const zoom = hasPos ? 15 : 6
-    if (map) map.remove()
-    map = L.map(mapContainer, { center, zoom, zoomControl: false })
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map)
-
-    if (hasPos) {
-      marker = L.marker([lat!, lng!], { draggable: true }).addTo(map)
-    }
-
-    marker?.on('dragend', async () => {
-      const pos = marker!.getLatLng()
-      lat = pos.lat
-      lng = pos.lng
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.lat}&lon=${pos.lng}&format=json`)
-        const data = await res.json()
-        if (data.display_name) address = data.display_name
-      } catch {}
-    })
-
-    map.on('click', async (e: L.LeafletMouseEvent) => {
-      lat = e.latlng.lat
-      lng = e.latlng.lng
-      if (marker) {
-        marker.setLatLng(e.latlng)
-      } else {
-        marker = L.marker(e.latlng, { draggable: true }).addTo(map!)
-      }
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${e.latlng.lat}&lon=${e.latlng.lng}&format=json`)
-        const data = await res.json()
-        if (data.display_name) address = data.display_name
-      } catch {}
-    })
-
-    setTimeout(() => map?.invalidateSize(), 200)
-  }
 
   async function saveField(field: string, patch: Record<string, unknown>) {
     savingField = field
@@ -132,97 +61,6 @@
 
   function removeLogo() {
     logoUrl = ''
-  }
-
-  let suggestions = $state<{ display_name: string; lat: string; lon: string }[]>([])
-  let searching = $state(false)
-  let showSuggestions = $state(false)
-  let searchTimer: ReturnType<typeof setTimeout> | null = null
-
-  function onSearchInput() {
-    showSuggestions = true
-    if (searchTimer) clearTimeout(searchTimer)
-    const q = address.trim()
-    if (q.length < 3) {
-      suggestions = []
-      return
-    }
-    searchTimer = setTimeout(runSearch, 400)
-  }
-
-  async function runSearch() {
-    const q = address.trim()
-    if (q.length < 3) return
-    searching = true
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`,
-        { headers: { Accept: 'application/json' } }
-      )
-      suggestions = await res.json()
-    } catch {
-      suggestions = []
-    } finally {
-      searching = false
-    }
-  }
-
-  function selectSuggestion(s: { display_name: string; lat: string; lon: string }) {
-    const la = parseFloat(s.lat)
-    const lo = parseFloat(s.lon)
-    lat = la
-    lng = lo
-    address = s.display_name
-    showSuggestions = false
-    suggestions = []
-    if (map) {
-      map.setView([la, lo], 15)
-      if (marker) marker.setLatLng([la, lo])
-      else marker = L.marker([la, lo], { draggable: true }).addTo(map)
-    }
-  }
-
-  function clearSearch() {
-    address = ''
-    suggestions = []
-    showSuggestions = false
-  }
-
-  function moveMarkerTo(la: number, lo: number, zoom = 15) {
-    if (!map) return
-    map.setView([la, lo], Math.max(map.getZoom(), zoom))
-    if (marker) marker.setLatLng([la, lo])
-    else marker = L.marker([la, lo], { draggable: true }).addTo(map)
-  }
-
-  let locating = $state(false)
-
-  function useMyLocation() {
-    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
-      showToast('error', t('business.settings.location_unsupported'))
-      return
-    }
-    locating = true
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const la = pos.coords.latitude
-        const lo = pos.coords.longitude
-        lat = la
-        lng = lo
-        moveMarkerTo(la, lo)
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${la}&lon=${lo}&format=json`)
-          const data = await res.json()
-          if (data.display_name) address = data.display_name
-        } catch {}
-        locating = false
-      },
-      () => {
-        showToast('error', t('business.settings.location_error'))
-        locating = false
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    )
   }
 
   let referralUrl = $derived(
@@ -348,51 +186,6 @@
           {t('business.settings.points_funded_desc', { funded: merchant.pointsFunded.toLocaleString() })}
         </p>
       </div>
-
-      <div class="space-y-2">
-        <p class="field-label">{t('business.settings.location')}</p>
-        <div class="relative">
-          <div class="flex items-center gap-2">
-            <input
-              bind:value={address}
-              oninput={onSearchInput}
-              onfocus={() => (showSuggestions = true)}
-              placeholder="Search address"
-              class="input-field" />
-            {#if address}
-              <button onclick={clearSearch} class="shrink-0 p-2 text-on-surface-variant hover:text-primary" aria-label="Clear">
-                <X size={18} />
-              </button>
-            {/if}
-          </div>
-          {#if showSuggestions && (searching || suggestions.length > 0)}
-            <div class="absolute z-20 left-0 right-0 mt-1 bg-surface-card border border-outline rounded-xl shadow-lg overflow-hidden max-h-60 overflow-y-auto">
-              {#if searching}
-                <div class="px-3 py-2 text-sm text-on-surface-variant">{t('common.loading')}</div>
-              {:else}
-                {#each suggestions as s}
-                  <button
-                    onclick={() => selectSuggestion(s)}
-                    class="block w-full text-start px-3 py-2 text-sm hover:bg-surface-container transition-colors border-b border-outline last:border-0">
-                    {s.display_name}
-                  </button>
-                {/each}
-              {/if}
-            </div>
-          {/if}
-        </div>
-          <div class="h-64 rounded-xl overflow-hidden border border-outline isolate" bind:this={mapContainer}></div>
-          <button type="button" onclick={useMyLocation} class="btn btn-secondary w-full mt-2">
-            <LocateFixed size={16} class="mr-2" />{t('business.settings.use_location')}
-          </button>
-          <button
-            onclick={() => saveField('location', { lat, lng, address: address.trim() || null })}
-            disabled={savingField === 'location'}
-            class="btn btn-secondary w-full mt-2"
-          >
-            <Save size={16} class="mr-2" />{savingField === 'location' ? t('common.saving') : t('common.save')}
-          </button>
-        </div>
     </div>
 
     <div class="card p-4 space-y-3 mt-4 animate-slide-up">

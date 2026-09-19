@@ -1,20 +1,17 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { getAuth } from './auth'
 import { env, type CloudflareBindings } from './config/env'
 import { sessionMiddleware } from './middleware/auth'
-import { rateLimitMiddleware } from './middleware/rateLimit'
 import { securityHeadersMiddleware } from './middleware/securityHeaders'
 import type { AppVariables } from './types/app'
-import { handleSendVerification, handleVerifyEmail, handleSendReset, handleResetPassword } from './routes/otp'
 import { meRoutes } from './routes/me'
 import { adminRoutes } from './routes/admin'
 import { clientRoutes } from './routes/client'
-import { notificationRoutes } from './routes/notifications'
 import { publicRoutes } from './routes/public'
 import { cashierRoutes } from './routes/cashier'
 import { businessRoutes } from './routes/business'
 import { uploadRoutes } from './routes/uploads'
+import { authRoutes } from './routes/auth'
 import { db } from './db'
 import { user as userSchema } from './db/schema'
 
@@ -47,7 +44,6 @@ export function createApp() {
     }),
   )
 
-  app.use('*', rateLimitMiddleware)
   app.use('*', securityHeadersMiddleware)
 
   app.use('*', async (c, next) => {
@@ -58,12 +54,6 @@ export function createApp() {
     console.log(`[${id}] ${c.req.method} ${c.req.path} ${c.res.status} ${ms}ms`)
   })
 
-  app.post('/api/auth/otp/send-verification', handleSendVerification)
-  app.post('/api/auth/otp/verify-email', handleVerifyEmail)
-  app.post('/api/auth/otp/send-reset', handleSendReset)
-  app.post('/api/auth/otp/reset-password', handleResetPassword)
-
-  app.on(['POST', 'GET'], '/api/auth/*', (c) => getAuth().handler(c.req.raw))
   app.get('/health', async (c) => {
     try {
       await db.select().from(userSchema).limit(1)
@@ -75,6 +65,8 @@ export function createApp() {
     }
   })
 
+  app.route('/api/auth', authRoutes)
+
   app.use('/api/me/*', sessionMiddleware)
   app.use('/api/admin/*', sessionMiddleware)
   app.use('/api/client/*', sessionMiddleware)
@@ -85,7 +77,6 @@ export function createApp() {
   app.route('/api/me', meRoutes)
   app.route('/api/admin', adminRoutes)
   app.route('/api/client', clientRoutes)
-  app.route('/api/client', notificationRoutes)
   app.route('/api/public', publicRoutes)
   app.route('/api/cashier', cashierRoutes)
   app.route('/api/business', businessRoutes)

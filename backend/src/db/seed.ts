@@ -34,7 +34,6 @@ async function main() {
   const users = [
     { id: randomUUID(), name: 'Admin User', email: 'admin@example.com', role: 'admin' as const, firstName: 'Admin', lastName: 'User' },
     { id: randomUUID(), name: 'Business Owner', email: 'business@example.com', role: 'business' as const, firstName: 'Samir', lastName: 'Trabelsi' },
-    { id: randomUUID(), name: 'Cashier One', email: 'cashier@example.com', role: 'cashier' as const, firstName: 'Leila', lastName: 'Benali' },
     { id: randomUUID(), name: 'Client User', email: 'client@example.com', role: 'client' as const, firstName: 'Ahmed', lastName: 'Mansour' },
   ]
 
@@ -70,7 +69,6 @@ async function main() {
   }
 
   const businessUser = users[1]
-  const cashierUser = users[2]
 
   const merchantId = randomUUID()
   await db.insert(schema.merchants).values({
@@ -96,14 +94,6 @@ async function main() {
     createdAt: now,
   })
 
-  await db.insert(schema.merchantStaff).values({
-    id: randomUUID(),
-    merchantId,
-    userId: cashierUser.id,
-    role: 'cashier',
-    createdAt: now,
-  })
-
   await db.insert(schema.rewards).values({
     id: randomUUID(),
     merchantId,
@@ -124,12 +114,40 @@ async function main() {
     createdAt: now,
   })
 
+  const clientUser = users[2]
+
+  await db.insert(schema.merchantSubscriptions).values({
+    id: randomUUID(),
+    userId: clientUser.id,
+    merchantId,
+    createdAt: now,
+  })
+
+  await db.insert(schema.customerCards).values({
+    id: randomUUID(),
+    customerId: clientUser.id,
+    merchantId,
+    fidelityPoints: 7,
+    lifetimePoints: 15,
+    lastVisitAt: new Date(now.getTime() - 2 * 86400000),
+    createdAt: now,
+    updatedAt: now,
+  })
+
+  await db.insert(schema.stampTransactions).values(
+    [
+      { id: randomUUID(), merchantId, customerId: clientUser.id, cashierId: businessUser.id, type: 'ADD_POINTS', balanceType: 'fidelity', amount: 8, createdAt: new Date(now.getTime() - 5 * 86400000) },
+      { id: randomUUID(), merchantId, customerId: clientUser.id, cashierId: businessUser.id, type: 'ADD_POINTS', balanceType: 'fidelity', amount: 7, createdAt: new Date(now.getTime() - 2 * 86400000) },
+      { id: randomUUID(), merchantId, customerId: clientUser.id, cashierId: businessUser.id, type: 'REMOVE_POINTS', balanceType: 'fidelity', rewardId: null, amount: 8, createdAt: new Date(now.getTime() - 1 * 86400000) },
+    ],
+  )
+
   console.log('Seeded:')
   console.log('  admin    admin@example.com    / password123')
   console.log('  business business@example.com / password123')
-  console.log('  cashier  cashier@example.com  / password123')
   console.log('  client   client@example.com   / password123')
   console.log('  merchant "Café Bonjour" (cafe-bonjour) with 2 rewards')
+  console.log('  client card: 7/10 fidelity points, 15 lifetime, 3 transactions')
   console.log('Done!')
 }
 

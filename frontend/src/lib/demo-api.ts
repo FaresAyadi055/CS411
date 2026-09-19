@@ -11,7 +11,6 @@ const DEMO_USERS: Record<string, UserProfile> = Object.fromEntries(
       lastName: c.name.split(' ').slice(1).join(' '),
       role: c.role as UserProfile['role'],
       locale: 'en',
-      notificationsEnabled: true,
       createdAt: new Date().toISOString(),
     },
   ])
@@ -28,9 +27,6 @@ const DEMO_MERCHANT = {
   pointsBalance: 500,
   pointsFunded: 1000,
   isActive: true,
-  address: '12 Rue de la Paix, Tunis',
-  lat: 36.8065,
-  lng: 10.1815,
   createdAt: Date.now() - 86400000 * 30,
   updatedAt: Date.now(),
 }
@@ -41,18 +37,17 @@ const DEMO_REWARDS = [
 ]
 
 const DEMO_STAFF = [
-  { id: 's1', userId: DEMO_USERS['business@example.com']!.id, role: 'owner' as const, createdAt: Date.now() - 86400000 * 30, firstName: 'Samir', lastName: 'Trabelsi', email: 'business@example.com', pointsAwarded: 45, mealAwarded: 0, transactionCount: 12 },
-  { id: 's2', userId: DEMO_USERS['cashier@example.com']!.id, role: 'cashier' as const, createdAt: Date.now() - 86400000 * 20, firstName: 'Leila', lastName: 'Benali', email: 'cashier@example.com', pointsAwarded: 120, mealAwarded: 0, transactionCount: 58 },
+  { id: 's1', userId: DEMO_USERS['business@example.com']!.id, role: 'business' as const, createdAt: Date.now() - 86400000 * 30, firstName: 'Samir', lastName: 'Trabelsi', email: 'business@example.com', pointsAwarded: 45, transactionCount: 12 },
 ]
 
 const DEMO_CARDS = [
-  { id: 'c1', customerId: DEMO_USERS['client@example.com']!.id, merchantId: DEMO_MERCHANT.id, merchantName: DEMO_MERCHANT.name, merchantLogo: null, fidelityPoints: 7, mealVoucherBalance: 0, lifetimePoints: 15, mealVoucherTotal: 0, lastVisitAt: Date.now() - 86400000 * 2, createdAt: Date.now() - 86400000 * 25, updatedAt: Date.now() - 86400000 * 2 },
+  { id: 'c1', customerId: DEMO_USERS['client@example.com']!.id, merchantId: DEMO_MERCHANT.id, merchantName: DEMO_MERCHANT.name, merchantLogo: null, fidelityPoints: 7, lifetimePoints: 15, lastVisitAt: Date.now() - 86400000 * 2, createdAt: Date.now() - 86400000 * 25, updatedAt: Date.now() - 86400000 * 2 },
 ]
 
 const DEMO_TRANSACTIONS = [
-  { id: 't1', merchantId: DEMO_MERCHANT.id, customerId: DEMO_USERS['client@example.com']!.id, cashierId: DEMO_USERS['cashier@example.com']!.id, type: 'EARN_STAMP' as const, stampsCount: 3, createdAt: Date.now() - 86400000 * 2, customerFirstName: 'Ahmed', customerLastName: 'Mansour', customerName: 'Ahmed Mansour', cashierName: 'Leila Benali' },
-  { id: 't2', merchantId: DEMO_MERCHANT.id, customerId: DEMO_USERS['client@example.com']!.id, cashierId: DEMO_USERS['cashier@example.com']!.id, type: 'EARN_STAMP' as const, stampsCount: 4, createdAt: Date.now() - 86400000 * 5, customerFirstName: 'Ahmed', customerLastName: 'Mansour', customerName: 'Ahmed Mansour', cashierName: 'Leila Benali' },
-  { id: 't3', merchantId: DEMO_MERCHANT.id, customerId: DEMO_USERS['client@example.com']!.id, cashierId: DEMO_USERS['cashier@example.com']!.id, type: 'EARN_STAMP' as const, stampsCount: 1, createdAt: Date.now() - 86400000 * 8, customerFirstName: 'Ahmed', customerLastName: 'Mansour', customerName: 'Ahmed Mansour', cashierName: 'Leila Benali' },
+  { id: 't1', merchantId: DEMO_MERCHANT.id, customerId: DEMO_USERS['client@example.com']!.id, cashierId: DEMO_USERS['business@example.com']!.id, type: 'EARN_STAMP' as const, stampsCount: 7, createdAt: Date.now() - 86400000 * 2, customerFirstName: 'Ahmed', customerLastName: 'Mansour', customerName: 'Ahmed Mansour', cashierName: 'Samir Trabelsi' },
+  { id: 't2', merchantId: DEMO_MERCHANT.id, customerId: DEMO_USERS['client@example.com']!.id, cashierId: DEMO_USERS['business@example.com']!.id, type: 'EARN_STAMP' as const, stampsCount: 8, createdAt: Date.now() - 86400000 * 5, customerFirstName: 'Ahmed', customerLastName: 'Mansour', customerName: 'Ahmed Mansour', cashierName: 'Samir Trabelsi' },
+  { id: 't3', merchantId: DEMO_MERCHANT.id, customerId: DEMO_USERS['client@example.com']!.id, cashierId: DEMO_USERS['business@example.com']!.id, type: 'REDEEM_REWARD' as const, stampsCount: 8, createdAt: Date.now() - 86400000 * 1, customerFirstName: 'Ahmed', customerLastName: 'Mansour', customerName: 'Ahmed Mansour', cashierName: 'Samir Trabelsi' },
 ]
 
 const DEMO_DAILY_ACTIVITY = Array.from({ length: 7 }, (_, i) => ({
@@ -63,9 +58,7 @@ const DEMO_DAILY_ACTIVITY = Array.from({ length: 7 }, (_, i) => ({
 
 const DEMO_DASHBOARD = {
   totalPointsAdded: 165,
-  totalMealVoucherAdded: 0,
   pointsRedeemed: 30,
-  mealVoucherRedeemed: 0,
   redemptionsCount: 3,
   uniqueCustomers: 12,
   newCustomersThisWeek: 2,
@@ -80,7 +73,7 @@ const DEMO_DASHBOARD = {
   hourlyDistribution: Array.from({ length: 24 }, (_, h) => ({ hour: h, count: h >= 8 && h <= 20 ? Math.floor(Math.random() * 5) : 0 })),
   weekdayDistribution: Array.from({ length: 7 }, (_, d) => ({ day: d, count: Math.floor(Math.random() * 10) + 2 })),
   topCustomers: [
-    { customerId: DEMO_USERS['client@example.com']!.id, firstName: 'Ahmed', lastName: 'Mansour', fidelityPoints: 7, mealVoucherBalance: 0, lifetimePoints: 15 },
+    { customerId: DEMO_USERS['client@example.com']!.id, firstName: 'Ahmed', lastName: 'Mansour', fidelityPoints: 7, lifetimePoints: 15 },
   ],
   topRewards: [{ rewardId: 'r1', title: 'Free Coffee', redemptions: 2 }],
   recentTransactions: DEMO_TRANSACTIONS.map((t) => ({ id: t.id, type: t.type, balanceType: 'fidelity' as const, amount: t.stampsCount, createdAt: t.createdAt, customerName: t.customerName!, rewardTitle: null })),
@@ -146,8 +139,8 @@ export function installDemoFetch() {
     if (method === 'POST' && path === '/api/auth/sign-up/email') {
       const { email, name } = body as { email: string; name: string }
       if (DEMO_USERS[email]) return json({ message: 'User already exists' }, 409)
-      const role = email.includes('admin') ? 'admin' : email.includes('business') ? 'business' : email.includes('cashier') ? 'cashier' : 'client'
-      const user: UserProfile = { id: crypto.randomUUID(), email, firstName: name.split(' ')[0], lastName: name.split(' ').slice(1).join(' '), role, locale: 'en', notificationsEnabled: true, createdAt: new Date().toISOString() }
+      const role = email.includes('admin') ? 'admin' : email.includes('business') ? 'business' : 'client'
+      const user: UserProfile = { id: crypto.randomUUID(), email, firstName: name.split(' ')[0], lastName: name.split(' ').slice(1).join(' '), role, locale: 'en', createdAt: new Date().toISOString() }
       DEMO_USERS[email] = user
       currentUser = user
       sessionStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(user))
@@ -218,10 +211,9 @@ export function installDemoFetch() {
     }
 
     if (method === 'POST' && path === '/api/cashier/adjust') {
-      const { fidelityPoints, mealVoucherBalance } = body as { fidelityPoints?: number; mealVoucherBalance?: number }
+      const { amount } = body as { amount?: number }
       const card = DEMO_CARDS[0]
-      if (fidelityPoints !== undefined) card.fidelityPoints = Math.max(0, card.fidelityPoints + fidelityPoints)
-      if (mealVoucherBalance !== undefined) card.mealVoucherBalance = Math.max(0, card.mealVoucherBalance + mealVoucherBalance)
+      if (amount !== undefined) card.fidelityPoints = Math.max(0, card.fidelityPoints + amount)
       return json({ card })
     }
 
@@ -240,7 +232,7 @@ export function installDemoFetch() {
     }
 
     if (method === 'GET' && path === '/api/business/customers') {
-      return json({ customers: [{ ...DEMO_USERS['client@example.com'], fidelityPoints: 7, mealVoucherBalance: 0, lifetimePoints: 15 }], hasMore: false })
+      return json({ customers: [{ ...DEMO_USERS['client@example.com'], fidelityPoints: 7, lifetimePoints: 15 }], hasMore: false })
     }
 
     if (method === 'GET' && path === '/api/business/staff') {
@@ -248,8 +240,8 @@ export function installDemoFetch() {
     }
 
     if (method === 'POST' && path === '/api/business/staff') {
-      const { email, role } = body as { email: string; role: string }
-      const newStaff = { id: crypto.randomUUID(), userId: crypto.randomUUID(), role: role as 'owner' | 'cashier', createdAt: Date.now(), firstName: email.split('@')[0], lastName: '', email, pointsAwarded: 0, mealAwarded: 0, transactionCount: 0 }
+      const { email } = body as { email: string }
+      const newStaff = { id: crypto.randomUUID(), userId: crypto.randomUUID(), role: 'business' as const, createdAt: Date.now(), firstName: email.split('@')[0], lastName: '', email, pointsAwarded: 0, transactionCount: 0 }
       DEMO_STAFF.push(newStaff)
       return json({ staff: newStaff })
     }
@@ -266,7 +258,7 @@ export function installDemoFetch() {
 
     if (method === 'POST' && path === '/api/business/rewards') {
       const { title, description, stampsCost } = body as { title: string; description?: string; stampsCost: number }
-      const newReward = { id: crypto.randomUUID(), merchantId: DEMO_MERCHANT.id, title, description: description ?? null, stampsCost, imageUrl: null, isAvailable: true, canRedeem: false, createdAt: Date.now() }
+      const newReward = { id: crypto.randomUUID(), merchantId: DEMO_MERCHANT.id, title, description: description ?? '', stampsCost, imageUrl: null, isAvailable: true, canRedeem: false, createdAt: Date.now() }
       DEMO_REWARDS.push(newReward)
       return json({ reward: newReward })
     }
@@ -332,7 +324,7 @@ export function installDemoFetch() {
         return json({ message: 'ok' })
       }
       if (params && path.endsWith('/customers') && method === 'GET') {
-        return json({ customers: [{ ...DEMO_USERS['client@example.com'], fidelityPoints: 7, mealVoucherBalance: 0, lifetimePoints: 15 }], hasMore: false })
+        return json({ customers: [{ ...DEMO_USERS['client@example.com'], fidelityPoints: 7, lifetimePoints: 15 }], hasMore: false })
       }
       if (params && path.endsWith('/adjust') && method === 'POST') return json({ message: 'ok' })
       if (params && path.endsWith('/fund') && method === 'POST') return json({ message: 'ok' })

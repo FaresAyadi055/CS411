@@ -143,9 +143,6 @@ CREATE TABLE IF NOT EXISTS "merchants" (
     "name"              TEXT    NOT NULL,
     "slug"              TEXT    NOT NULL UNIQUE,
     "logo_url"          TEXT,
-    "lat"               REAL,
-    "lng"               REAL,
-    "address"           TEXT,
     "stamps_per_reward" INTEGER NOT NULL DEFAULT 10,
     "plan_tier"         TEXT    NOT NULL DEFAULT 'starter', -- 'starter', 'growth', 'pro'
     "monthly_point_cap" INTEGER NOT NULL DEFAULT 300,
@@ -177,9 +174,7 @@ CREATE TABLE IF NOT EXISTS "customer_cards" (
     "customer_id"             TEXT    NOT NULL REFERENCES "auth_users"("id") ON DELETE CASCADE,
     "merchant_id"             TEXT    NOT NULL REFERENCES "merchants"("id") ON DELETE CASCADE,
     "fidelity_points"         INTEGER NOT NULL DEFAULT 0,
-    "meal_voucher_balance"    REAL    NOT NULL DEFAULT 0,
     "lifetime_points"         INTEGER NOT NULL DEFAULT 0,
-    "meal_voucher_total"      REAL    NOT NULL DEFAULT 0,
     "last_visit_at"           INTEGER,
     "created_at"              INTEGER NOT NULL,
     "updated_at"              INTEGER NOT NULL,
@@ -209,8 +204,8 @@ CREATE TABLE IF NOT EXISTS "stamp_transactions" (
     "merchant_id"   TEXT    NOT NULL REFERENCES "merchants"("id") ON DELETE CASCADE,
     "customer_id"   TEXT    NOT NULL REFERENCES "auth_users"("id") ON DELETE CASCADE,
     "cashier_id"    TEXT    NOT NULL REFERENCES "auth_users"("id"),
-    "type"          TEXT    NOT NULL, -- 'ADD_POINTS', 'REMOVE_POINTS', 'ADD_MEAL_VOUCHER', 'REMOVE_MEAL_VOUCHER'
-    "balance_type"  TEXT    NOT NULL, -- 'fidelity' or 'meal_voucher'
+    "type"          TEXT    NOT NULL, -- 'ADD_POINTS', 'REMOVE_POINTS'
+    "balance_type"  TEXT    NOT NULL DEFAULT 'fidelity',
     "reward_id"     TEXT    REFERENCES "rewards"("id") ON DELETE SET NULL,
     "amount"        REAL    NOT NULL DEFAULT 0,
     "created_at"    INTEGER NOT NULL

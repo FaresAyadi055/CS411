@@ -12,9 +12,7 @@ import {
 export interface DashboardStats {
   // Lifetime totals
   totalPointsAdded: number
-  totalMealVoucherAdded: number
   pointsRedeemed: number
-  mealVoucherRedeemed: number
   redemptionsCount: number
   uniqueCustomers: number
   newCustomersThisWeek: number
@@ -42,7 +40,6 @@ export interface DashboardStats {
     firstName: string | null
     lastName: string | null
     fidelityPoints: number
-    mealVoucherBalance: number
     lifetimePoints: number
   }>
   topRewards: Array<{ rewardId: string; title: string; redemptions: number }>
@@ -78,9 +75,7 @@ export async function getMerchantDashboard(merchantId: string, days = 14): Promi
   const [
     merchantRows,
     totalPointsResult,
-    totalMealResult,
     pointsRedeemedResult,
-    mealRedeemedResult,
     redemptionsCountResult,
     uniqueCustomersResult,
     newCustomersResult,
@@ -112,28 +107,8 @@ export async function getMerchantDashboard(merchantId: string, days = 14): Promi
       .where(
         and(
           eq(stampTransactions.merchantId, merchantId),
-          eq(stampTransactions.balanceType, 'meal_voucher'),
-          eq(stampTransactions.type, 'ADD_MEAL_VOUCHER'),
-        ),
-      ),
-    db
-      .select({ sum: sql<number>`coalesce(sum(${stampTransactions.amount}), 0)` })
-      .from(stampTransactions)
-      .where(
-        and(
-          eq(stampTransactions.merchantId, merchantId),
           eq(stampTransactions.balanceType, 'fidelity'),
           eq(stampTransactions.type, 'REMOVE_POINTS'),
-        ),
-      ),
-    db
-      .select({ sum: sql<number>`coalesce(sum(${stampTransactions.amount}), 0)` })
-      .from(stampTransactions)
-      .where(
-        and(
-          eq(stampTransactions.merchantId, merchantId),
-          eq(stampTransactions.balanceType, 'meal_voucher'),
-          eq(stampTransactions.type, 'REMOVE_MEAL_VOUCHER'),
         ),
       ),
     db
@@ -173,8 +148,8 @@ export async function getMerchantDashboard(merchantId: string, days = 14): Promi
     db
       .select({
         date: sql<string>`strftime('%Y-%m-%d', ${stampTransactions.createdAt} / 1000, 'unixepoch')`,
-        earned: sql<number>`coalesce(sum(case when ${stampTransactions.type} in ('ADD_POINTS','ADD_MEAL_VOUCHER') then 1 else 0 end), 0)`,
-        redeemed: sql<number>`coalesce(sum(case when ${stampTransactions.type} in ('REMOVE_POINTS','REMOVE_MEAL_VOUCHER') then 1 else 0 end), 0)`,
+        earned: sql<number>`coalesce(sum(case when ${stampTransactions.type} = 'ADD_POINTS' then 1 else 0 end), 0)`,
+        redeemed: sql<number>`coalesce(sum(case when ${stampTransactions.type} = 'REMOVE_POINTS' then 1 else 0 end), 0)`,
       })
       .from(stampTransactions)
       .where(and(eq(stampTransactions.merchantId, merchantId), sql`${stampTransactions.createdAt} >= ${seriesStartMs}`))
@@ -201,7 +176,6 @@ export async function getMerchantDashboard(merchantId: string, days = 14): Promi
         firstName: user.firstName,
         lastName: user.lastName,
         fidelityPoints: customerCards.fidelityPoints,
-        mealVoucherBalance: customerCards.mealVoucherBalance,
         lifetimePoints: customerCards.lifetimePoints,
       })
       .from(customerCards)
@@ -270,9 +244,7 @@ export async function getMerchantDashboard(merchantId: string, days = 14): Promi
 
   return {
     totalPointsAdded: totalPointsResult[0]?.sum ?? 0,
-    totalMealVoucherAdded: totalMealResult[0]?.sum ?? 0,
     pointsRedeemed: pointsRedeemedResult[0]?.sum ?? 0,
-    mealVoucherRedeemed: mealRedeemedResult[0]?.sum ?? 0,
     redemptionsCount: redemptionsCountResult[0]?.count ?? 0,
     uniqueCustomers: uniqueCustomersResult[0]?.count ?? 0,
     newCustomersThisWeek: newCustomersResult[0]?.count ?? 0,
@@ -291,7 +263,6 @@ export async function getMerchantDashboard(merchantId: string, days = 14): Promi
       firstName: c.firstName,
       lastName: c.lastName,
       fidelityPoints: c.fidelityPoints,
-      mealVoucherBalance: c.mealVoucherBalance,
       lifetimePoints: c.lifetimePoints,
     })),
     topRewards: topRewardsResult.map((r) => ({
@@ -315,7 +286,6 @@ export async function getMerchantCustomers(merchantId: string, limit = 100, curs
       phone: user.phone,
       email: user.email,
       fidelityPoints: customerCards.fidelityPoints,
-      mealVoucherBalance: customerCards.mealVoucherBalance,
       lifetimePoints: customerCards.lifetimePoints,
       lastVisitAt: customerCards.lastVisitAt,
     })

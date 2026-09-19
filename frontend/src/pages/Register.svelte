@@ -2,10 +2,13 @@
   import { onMount } from 'svelte'
   import { Eye, EyeOff, UserCircle } from '@lucide/svelte'
   import { t } from '../lib/i18n.svelte'
-  import { getAuthErrorFromUrl, clearAuthErrorFromUrl, login, socialLoginRedirect, getReferral } from '../stores/auth.svelte'
+  import { getAuthErrorFromUrl, clearAuthErrorFromUrl, login, getReferral, getUser } from '../stores/auth.svelte'
+  import { navigate } from '../stores/router.svelte'
   import { api } from '../lib/api'
   import demoCredentials from '../data/demo-credentials.json'
 
+  let { isRegisterPage = false }: { isRegisterPage?: boolean } = $props()
+  
   type ReferralPreview = { name: string; logoUrl: string | null }
   let referral = $state<ReferralPreview | null>(null)
 
@@ -24,16 +27,15 @@
   const roleBadgeColor: Record<string, string> = {
     admin: 'bg-purple-100 text-purple-700 border-purple-200',
     business: 'bg-blue-100 text-blue-700 border-blue-200',
-    cashier: 'bg-amber-100 text-amber-700 border-amber-200',
     client: 'bg-green-100 text-green-700 border-green-200',
   }
+
 
   async function handleSubmit() {
     error = ''
     loading = true
     try {
       await login(email, password)
-      socialLoginRedirect()
     } catch (e) {
       error = (e as Error).message
     } finally {
@@ -56,6 +58,9 @@
         })
         .catch(() => {})
     }
+    if (getUser()) {
+      navigate('qr')
+    }
   })
 </script>
 
@@ -76,33 +81,6 @@
     {/if}
 
     <div class="card p-6 mb-4">
-      <h2 class="text-lg font-bold tracking-tight mb-1">Demo Accounts</h2>
-      <p class="text-xs text-on-surface-variant mb-3">Pick a role to explore the app instantly.</p>
-      <div class="space-y-2">
-        {#each demoCredentials as cred}
-          <button
-            type="button"
-            onclick={() => useCredential(cred)}
-            class="w-full flex items-center gap-3 p-3 rounded-lg border border-outline hover:bg-surface-container-low transition-colors text-left"
-          >
-            <UserCircle size={32} class="shrink-0 text-on-surface-variant" />
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="text-sm font-medium truncate">{cred.name}</span>
-                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border {roleBadgeColor[cred.role] || ''}">
-                  {cred.role}
-                </span>
-              </div>
-              <p class="text-xs text-on-surface-variant truncate">{cred.email}</p>
-              <p class="text-[11px] text-on-surface-variant/70">{cred.description}</p>
-            </div>
-            <span class="text-xs text-primary font-semibold shrink-0">Use</span>
-          </button>
-        {/each}
-      </div>
-    </div>
-
-    <div class="card p-6">
       <h2 class="text-lg font-bold tracking-tight mb-4">{t('auth.sign.in')}</h2>
 
         {#if error}
@@ -162,6 +140,33 @@
           </button>
         </form>
 
+    </div>
+
+    <div class="card p-6">
+      <h2 class="text-sm font-bold tracking-tight mb-1">Demo Accounts</h2>
+      <p class="text-xs text-on-surface-variant mb-3">Pick a role to explore the app instantly.</p>
+      <div class="space-y-2">
+        {#each demoCredentials as cred}
+          <button
+            type="button"
+            onclick={() => useCredential(cred)}
+            class="w-full flex items-center gap-3 p-3 rounded-lg border border-outline hover:bg-surface-container-low transition-colors text-left"
+          >
+            <UserCircle size={32} class="shrink-0 text-on-surface-variant" />
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium truncate">{cred.name}</span>
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border {roleBadgeColor[cred.role] || ''}">
+                  {cred.role}
+                </span>
+              </div>
+              <p class="text-xs text-on-surface-variant truncate">{cred.email}</p>
+              <p class="text-[11px] text-on-surface-variant/70">{cred.description}</p>
+            </div>
+            <span class="text-xs text-primary font-semibold shrink-0">Use</span>
+          </button>
+        {/each}
+      </div>
     </div>
   </div>
 </main>

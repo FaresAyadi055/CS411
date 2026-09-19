@@ -53,7 +53,7 @@
 
   function goBack() {
     const user = getUser()
-    navigate(user?.role === 'cashier' ? 'scan' : 'dashboard')
+    navigate(user?.role === 'business' ? 'scan' : 'dashboard')
   }
 </script>
 

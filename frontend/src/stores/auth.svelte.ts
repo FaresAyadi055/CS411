@@ -1,24 +1,8 @@
 import api, { apiFetch, setOnSessionExpired, setApiAuthState } from '../lib/api'
 import type { UserProfile } from '../lib/types'
-import { authClient, type SocialProvider } from '../lib/auth-client'
 import { navigate } from './router.svelte'
-import { getLocale } from '../lib/i18n.svelte'
-
-export type { SocialProvider }
 
 const PROFILE_CACHE_KEY = 'appbase_profile_cache'
-const LAST_LOGIN_METHOD_KEY = 'appbase_last_login'
-const PENDING_PROVIDER_KEY = 'appbase_pending_provider'
-
-export type LoginMethod = 'email' | 'google' | 'facebook'
-
-export function getLastLoginMethod(): LoginMethod | null {
-  return localStorage.getItem(LAST_LOGIN_METHOD_KEY) as LoginMethod | null
-}
-
-export function setLastLoginMethod(method: LoginMethod) {
-  localStorage.setItem(LAST_LOGIN_METHOD_KEY, method)
-}
 
 function readProfileCache(): UserProfile | null {
   try {
@@ -61,19 +45,13 @@ export async function checkSession() {
 }
 
 async function applyReferral() {
-  if (!user) return
   const ref = getReferral()
-  if (!ref) return
-  const ok = await subscribeToMerchant(ref)
-  if (ok) setReferral(null)
-}
-
-export async function subscribeToMerchant(merchantRef: string): Promise<boolean> {
+  if (!ref || !user) return
   try {
-    await api.post('/api/client/subscribe', { merchantId: merchantRef })
-    return true
+    await api.post('/api/client/cards', { referral: ref })
+    setReferral(null)
   } catch {
-    return false
+    return true
   }
 }
 
@@ -128,6 +106,10 @@ export async function login(email: string, password: string) {
   if (!user) {
     throw new Error('Could not load your profile. Try again.')
   }
+  const u = getUser()
+  if (u?.role === 'admin') navigate('admin', { section: 'overview' })
+  else if (u?.role === 'business') navigate('dashboard')
+  else navigate('qr')
 }
 
 export async function register(email: string, password: string, name: string) {
@@ -136,6 +118,7 @@ export async function register(email: string, password: string, name: string) {
     const body = await res.json().catch(() => ({}))
     throw new Error(extractError(body, 'Registration failed'))
   }
+  navigate('dashboard')
 }
 
 export function getAuthErrorFromUrl(): string | null {
@@ -153,51 +136,12 @@ export function clearAuthErrorFromUrl() {
   window.location.hash = hash.slice(0, qIndex)
 }
 
-export async function socialLogin(provider: SocialProvider, callbackURL?: string) {
-  sessionStorage.setItem(PENDING_PROVIDER_KEY, provider)
-  const cb = callbackURL || `${window.location.origin}/oauth-callback`
-  const res = await apiFetch('/api/auth/sign-in/social', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ provider, callbackURL: cb, errorCallbackURL: cb }),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error((body as { message?: string }).message || 'Failed to start social login')
-  }
-  const data = (await res.json()) as { url?: string; redirect?: boolean }
-  if (data.url) {
-    window.location.href = data.url
-  }
+export async function sendResetOtp(_email: string) {
+  return { message: 'OTP sent (demo)' }
 }
 
-/** Called when the OAuth popup signals completion. Uses cookies (not localStorage token). */
-export async function resolveOAuthSession() {
-  loading = true
-  try {
-    const res = await apiFetch('/api/auth/get-session', {
-      method: 'GET',
-      credentials: 'include',
-    })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      throw new Error((body as { message?: string }).message || 'Could not verify session after sign in')
-    }
-
-    setApiAuthState(true)
-    await checkSession()
-    if (user) {
-      const pending = sessionStorage.getItem(PENDING_PROVIDER_KEY)
-      if (pending) {
-        setLastLoginMethod(pending as LoginMethod)
-        sessionStorage.removeItem(PENDING_PROVIDER_KEY)
-      }
-      socialLoginRedirect()
-    }
-  } finally {
-    loading = false
-  }
+export async function resetPassword(_email: string, _code: string, _newPassword: string) {
+  return { message: 'Password reset (demo)' }
 }
 
 export function socialLoginRedirect() {
@@ -208,10 +152,6 @@ export function socialLoginRedirect() {
     }
     if (user.role === 'business') {
       navigate('dashboard')
-      return
-    }
-    if (user.role === 'cashier') {
-      navigate('scan')
       return
     }
     navigate('qr')
@@ -242,34 +182,3 @@ export function isAuthenticated() {
 export function hasRole(role: string) {
   return user?.role === role
 }
-
-async function otpFetch(path: string, body: unknown) {
-  const res = await apiFetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    throw new Error((data as { message?: string }).message || 'Request failed')
-  }
-  return data as { message: string }
-}
-
-export async function sendVerificationOtp(email: string) {
-  return otpFetch('/api/auth/otp/send-verification', { email, locale: getLocale() })
-}
-
-export async function verifyEmailOtp(email: string, code: string) {
-  return otpFetch('/api/auth/otp/verify-email', { email, code })
-}
-
-export async function sendResetOtp(email: string) {
-  return otpFetch('/api/auth/otp/send-reset', { email, locale: getLocale() })
-}
-
-export async function resetPassword(email: string, code: string, newPassword: string) {
-  return otpFetch('/api/auth/otp/reset-password', { email, code, newPassword })
-}
-
-export { authClient }

@@ -6,32 +6,24 @@ import {
   customerCards,
   stampTransactions,
   usedQrSignatures,
-  merchantSubscriptions,
-  notifications,
   authUsers,
-  user,
 } from '../db/schema'
 import { parseQrPayload, verifyTotp, getSignature } from './totp'
 import { jsonError } from '../lib/errors'
-import { sendPush } from './push'
 
 export interface VerifyResult {
   customerId: string
   customerName: string
   merchantId: string
   fidelityPoints: number
-  mealVoucherBalance: number
   lifetimePoints: number
-  mealVoucherTotal: number
 }
 
 export interface AdjustResult {
   customerId: string
   merchantId: string
   fidelityPoints: number
-  mealVoucherBalance: number
   lifetimePoints: number
-  mealVoucherTotal: number
   transactionId: string
   lowBalance?: boolean
 }
@@ -86,9 +78,7 @@ export async function getOrCreateCard(customerId: string, merchantId: string) {
       customerId,
       merchantId,
       fidelityPoints: 0,
-      mealVoucherBalance: 0,
       lifetimePoints: 0,
-      mealVoucherTotal: 0,
       lastVisitAt: now,
       createdAt: now,
       updatedAt: now,
@@ -156,26 +146,55 @@ export async function verifyQr(
 
   const card = await getOrCreateCard(payload.u, merchantId)
 
-  await db
-    .insert(merchantSubscriptions)
-    .values({ id: crypto.randomUUID(), userId: payload.u, merchantId, createdAt: new Date() })
-    .onConflictDoNothing()
-
   return {
     customerId: payload.u,
     customerName: customer.name,
     merchantId,
     fidelityPoints: card.fidelityPoints,
-    mealVoucherBalance: card.mealVoucherBalance,
     lifetimePoints: card.lifetimePoints,
-    mealVoucherTotal: card.mealVoucherTotal,
+  }
+}
+
+export async function verifyQrByCustomerId(
+  customerId: string,
+  totpCode: string,
+  cashierId: string,
+): Promise<VerifyResult> {
+  const [customer] = await db
+    .select({ id: authUsers.id, name: authUsers.name, totpSecret: authUsers.totpSecret })
+    .from(authUsers)
+    .where(eq(authUsers.id, customerId))
+    .limit(1)
+  if (!customer) {
+    throw jsonError(400, 'Customer not found', 'CUSTOMER_NOT_FOUND')
+  }
+
+  if (totpCode) {
+    if (!customer.totpSecret) {
+      throw jsonError(400, 'Customer has no TOTP secret', 'NO_TOTP_SECRET')
+    }
+    const valid = await verifyTotp(customer.totpSecret, totpCode)
+    if (!valid) {
+      throw jsonError(400, 'Invalid or expired TOTP code', 'INVALID_TOTP')
+    }
+  }
+
+  const { merchantId } = await resolveCashierMerchant(cashierId)
+
+  const card = await getOrCreateCard(customerId, merchantId)
+
+  return {
+    customerId,
+    customerName: customer.name,
+    merchantId,
+    fidelityPoints: card.fidelityPoints,
+    lifetimePoints: card.lifetimePoints,
   }
 }
 
 export async function adjustBalance(
   cashierId: string,
   customerId: string,
-  balanceType: 'fidelity' | 'meal_voucher',
   amount: number,
   rewardId?: string | null,
 ): Promise<AdjustResult> {
@@ -191,17 +210,12 @@ export async function adjustBalance(
   const card = await getOrCreateCard(customerId, merchantId)
 
   const now = new Date()
-
-  // There is no hard cap anymore: giving a customer points simply draws down the
-  // business's admin-funded balance. We surface a warning when it runs dry.
   const startingBalance = pointsBalance ?? 0
-  const newBalance = Math.max(0, startingBalance - (balanceType === 'fidelity' && !isRemove ? absAmount : 0))
+  const newBalance = Math.max(0, startingBalance - (!isRemove ? absAmount : 0))
   const lowBalance = newBalance <= 0
 
-  // Wrap every write in a single transaction so a crash between statements can't leave a
-  // balance out of sync with the stamp_transactions audit log.
   return await db.transaction(async (tx) => {
-    if (balanceType === 'fidelity' && !isRemove) {
+    if (!isRemove) {
       await tx
         .update(merchants)
         .set({
@@ -213,60 +227,45 @@ export async function adjustBalance(
 
     const balUpd = await tx
       .update(customerCards)
-      .set(
-        balanceType === 'fidelity'
-          ? {
-              fidelityPoints: sql`${customerCards.fidelityPoints} + ${amount}`,
-              lifetimePoints: sql`${customerCards.lifetimePoints} + ${amount > 0 ? amount : 0}`,
-              lastVisitAt: now,
-              updatedAt: now,
-            }
-          : {
-              mealVoucherBalance: sql`${customerCards.mealVoucherBalance} + ${amount}`,
-              mealVoucherTotal: sql`${customerCards.mealVoucherTotal} + ${amount > 0 ? amount : 0}`,
-              lastVisitAt: now,
-              updatedAt: now,
-            },
-      )
+      .set({
+        fidelityPoints: sql`${customerCards.fidelityPoints} + ${amount}`,
+        lifetimePoints: sql`${customerCards.lifetimePoints} + ${amount > 0 ? amount : 0}`,
+        lastVisitAt: now,
+        updatedAt: now,
+      })
       .where(
         isRemove
           ? and(
               eq(customerCards.id, card.id),
-              sql`${
-                balanceType === 'fidelity'
-                  ? customerCards.fidelityPoints
-                  : customerCards.mealVoucherBalance
-              } >= ${absAmount}`,
+              sql`${customerCards.fidelityPoints} >= ${absAmount}`,
             )
           : eq(customerCards.id, card.id),
       )
     if (balUpd.rowsAffected === 0) {
-      throw balanceType === 'fidelity'
-        ? jsonError(400, 'Insufficient fidelity points', 'INSUFFICIENT_POINTS')
-        : jsonError(400, 'Insufficient meal voucher balance', 'INSUFFICIENT_MEAL_VOUCHER')
+      throw jsonError(400, 'Insufficient fidelity points', 'INSUFFICIENT_POINTS')
     }
 
-    const transactionId = await recordTransaction(
-      tx,
+    const txType = isRemove ? 'REMOVE_POINTS' : 'ADD_POINTS'
+    const transactionId = crypto.randomUUID()
+    await tx.insert(stampTransactions).values({
+      id: transactionId,
       merchantId,
-      merchantName,
       customerId,
       cashierId,
-      balanceType,
-      isRemove,
-      absAmount,
-      rewardId,
-      now,
-    )
+      type: txType,
+      balanceType: 'fidelity',
+      rewardId: rewardId ?? null,
+      amount: absAmount,
+      createdAt: now,
+    })
 
     return {
       customerId,
       merchantId,
-      fidelityPoints: card.fidelityPoints + (balanceType === 'fidelity' ? amount : 0),
-      mealVoucherBalance: card.mealVoucherBalance + (balanceType === 'meal_voucher' ? amount : 0),
-      lifetimePoints: card.lifetimePoints + (balanceType === 'fidelity' && amount > 0 ? amount : 0),
-      mealVoucherTotal: card.mealVoucherTotal + (balanceType === 'meal_voucher' && amount > 0 ? amount : 0),
+      fidelityPoints: card.fidelityPoints + amount,
+      lifetimePoints: card.lifetimePoints + (amount > 0 ? amount : 0),
       transactionId,
+      lowBalance,
     }
   })
 }
@@ -275,7 +274,6 @@ export async function adminAdjustBalance(
   actorId: string,
   merchantId: string,
   customerId: string,
-  balanceType: 'fidelity' | 'meal_voucher',
   amount: number,
 ): Promise<AdjustResult> {
   const [merchant] = await db
@@ -291,17 +289,12 @@ export async function adminAdjustBalance(
 
   const card = await getOrCreateCard(customerId, merchantId)
 
-  await db
-    .insert(merchantSubscriptions)
-    .values({ id: crypto.randomUUID(), userId: customerId, merchantId, createdAt: new Date() })
-    .onConflictDoNothing()
-
   const now = new Date()
   const startingBalance = merchant.pointsBalance ?? 0
-  const newBalance = Math.max(0, startingBalance - (balanceType === 'fidelity' && !isRemove ? absAmount : 0))
+  const newBalance = Math.max(0, startingBalance - (!isRemove ? absAmount : 0))
   const lowBalance = newBalance <= 0
   return await db.transaction(async (tx) => {
-    if (balanceType === 'fidelity' && !isRemove) {
+    if (!isRemove) {
       await tx
         .update(merchants)
         .set({ pointsBalance: newBalance, updatedAt: now })
@@ -310,144 +303,45 @@ export async function adminAdjustBalance(
 
     const balUpd = await tx
       .update(customerCards)
-      .set(
-        balanceType === 'fidelity'
-          ? {
-              fidelityPoints: sql`${customerCards.fidelityPoints} + ${amount}`,
-              lifetimePoints: sql`${customerCards.lifetimePoints} + ${amount > 0 ? amount : 0}`,
-              lastVisitAt: now,
-              updatedAt: now,
-            }
-          : {
-              mealVoucherBalance: sql`${customerCards.mealVoucherBalance} + ${amount}`,
-              mealVoucherTotal: sql`${customerCards.mealVoucherTotal} + ${amount > 0 ? amount : 0}`,
-              lastVisitAt: now,
-              updatedAt: now,
-            },
-      )
+      .set({
+        fidelityPoints: sql`${customerCards.fidelityPoints} + ${amount}`,
+        lifetimePoints: sql`${customerCards.lifetimePoints} + ${amount > 0 ? amount : 0}`,
+        lastVisitAt: now,
+        updatedAt: now,
+      })
       .where(
         isRemove
           ? and(
               eq(customerCards.id, card.id),
-              sql`${
-                balanceType === 'fidelity'
-                  ? customerCards.fidelityPoints
-                  : customerCards.mealVoucherBalance
-              } >= ${absAmount}`,
+              sql`${customerCards.fidelityPoints} >= ${absAmount}`,
             )
           : eq(customerCards.id, card.id),
       )
     if (balUpd.rowsAffected === 0) {
-      throw balanceType === 'fidelity'
-        ? jsonError(400, 'Insufficient fidelity points', 'INSUFFICIENT_POINTS')
-        : jsonError(400, 'Insufficient meal voucher balance', 'INSUFFICIENT_MEAL_VOUCHER')
+      throw jsonError(400, 'Insufficient fidelity points', 'INSUFFICIENT_POINTS')
     }
 
-    const transactionId = await recordTransaction(
-      tx,
+    const txType = isRemove ? 'REMOVE_POINTS' : 'ADD_POINTS'
+    const transactionId = crypto.randomUUID()
+    await tx.insert(stampTransactions).values({
+      id: transactionId,
       merchantId,
-      merchant.name,
       customerId,
-      actorId,
-      balanceType,
-      isRemove,
-      absAmount,
-      null,
-      now,
-    )
+      cashierId: actorId,
+      type: txType,
+      balanceType: 'fidelity',
+      rewardId: null,
+      amount: absAmount,
+      createdAt: now,
+    })
 
     return {
       customerId,
       merchantId,
-      fidelityPoints: card.fidelityPoints + (balanceType === 'fidelity' ? amount : 0),
-      mealVoucherBalance: card.mealVoucherBalance + (balanceType === 'meal_voucher' ? amount : 0),
-      lifetimePoints: card.lifetimePoints + (balanceType === 'fidelity' && amount > 0 ? amount : 0),
-      mealVoucherTotal: card.mealVoucherTotal + (balanceType === 'meal_voucher' && amount > 0 ? amount : 0),
+      fidelityPoints: card.fidelityPoints + amount,
+      lifetimePoints: card.lifetimePoints + (amount > 0 ? amount : 0),
       transactionId,
       lowBalance,
     }
   })
-}
-
-async function recordTransaction(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  merchantId: string,
-  merchantName: string,
-  customerId: string,
-  cashierId: string,
-  balanceType: 'fidelity' | 'meal_voucher',
-  isRemove: boolean,
-  absAmount: number,
-  rewardId: string | null | undefined,
-  now: Date,
-): Promise<string> {
-  const txType = isRemove
-    ? (balanceType === 'fidelity' ? 'REMOVE_POINTS' : 'REMOVE_MEAL_VOUCHER')
-    : (balanceType === 'fidelity' ? 'ADD_POINTS' : 'ADD_MEAL_VOUCHER')
-
-  const id = crypto.randomUUID()
-  await tx.insert(stampTransactions).values({
-    id,
-    merchantId,
-    customerId,
-    cashierId,
-    type: txType,
-    balanceType,
-    rewardId: rewardId ?? null,
-    amount: absAmount,
-    createdAt: now,
-  })
-
-  await tx
-    .insert(merchantSubscriptions)
-    .values({ id: crypto.randomUUID(), userId: customerId, merchantId, createdAt: now })
-    .onConflictDoNothing()
-
-  const notificationType = rewardId
-    ? 'reward_redeemed'
-    : txType === 'ADD_POINTS'
-      ? 'points_earned'
-      : txType === 'ADD_MEAL_VOUCHER'
-        ? 'meal_earned'
-        : txType === 'REMOVE_POINTS'
-          ? 'points_spent'
-          : 'meal_spent'
-  const data = rewardId ? { rewardId } : { amount: absAmount }
-
-  const [pref] = await tx
-    .select({ enabled: user.notificationsEnabled })
-    .from(user)
-    .where(eq(user.id, customerId))
-  const enabled = pref ? pref.enabled : true
-
-  if (enabled) {
-    await tx.insert(notifications).values({
-      id: crypto.randomUUID(),
-      userId: customerId,
-      merchantId,
-      type: notificationType,
-      data: JSON.stringify(data),
-      isRead: false,
-      createdAt: now,
-    })
-
-    const body =
-      notificationType === 'reward_redeemed'
-        ? `Récompense débloquée chez ${merchantName}`
-        : notificationType === 'points_earned'
-          ? `+${absAmount} points chez ${merchantName}`
-          : notificationType === 'meal_earned'
-            ? `+${absAmount} ticket repas chez ${merchantName}`
-            : notificationType === 'points_spent'
-              ? `${absAmount} points utilisés chez ${merchantName}`
-              : `${absAmount} ticket repas utilisés chez ${merchantName}`
-
-    void sendPush(customerId, {
-      title: 'Fidelito',
-      body,
-      tag: `fidelito:${notificationType}`,
-    }).catch(() => {})
-  }
-
-  return id
 }

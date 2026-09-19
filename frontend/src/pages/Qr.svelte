@@ -6,11 +6,6 @@
   import api from '../lib/api'
   import { generateTotp, buildQrPayload } from '../lib/totp'
   import { getUser } from '../stores/auth.svelte'
-  import { pwa, promptInstall } from '../lib/pwa.svelte'
-
-  async function installApp() {
-    await promptInstall()
-  }
 
   const PERIOD = 30
   const QR_SECRET_KEY = 'fidelito_qr_secret'
@@ -225,19 +220,7 @@
       <QrCode size={28} class="text-primary" />
     </div>
     <h1 class="text-xl font-bold">{t('qr.title')}</h1>
-    {#if !pwa.installed}
-      <p class="text-sm text-on-surface-variant mt-1 flex items-center justify-center gap-1">
-        <Download size={13} class="text-primary" />
-        <!-- svelte-ignore a11y_invalid_attribute -->
-        <a
-          href="#"
-          onclick={(e) => { e.preventDefault(); installApp() }}
-          class="text-primary underline font-semibold"
-        >{t('qr.install.title')}</a>
-      </p>
-    {:else}
-      <p class="text-sm text-on-surface-variant mt-1">{t('qr.subtitle')}</p>
-    {/if}
+    <p class="text-sm text-on-surface-variant mt-1">{t('qr.subtitle')}</p>
   </div>
 
   {#if loading}

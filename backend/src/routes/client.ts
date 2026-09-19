@@ -12,7 +12,7 @@ import type { AppVariables } from '../types/app'
 export const clientRoutes = new Hono<{ Variables: AppVariables }>()
 
 clientRoutes.use('*', requireAuth())
-clientRoutes.use('*', requireRole('client', 'cashier', 'business', 'admin'))
+clientRoutes.use('*', requireRole('client', 'business', 'admin'))
 
 clientRoutes.post(
   '/subscribe',
@@ -41,9 +41,7 @@ clientRoutes.post(
         customerId: userId,
         merchantId: merchant.id,
         fidelityPoints: 0,
-        mealVoucherBalance: 0,
         lifetimePoints: 0,
-        mealVoucherTotal: 0,
         lastVisitAt: now,
         createdAt: now,
         updatedAt: now,
@@ -120,9 +118,7 @@ clientRoutes.get('/cards', async (c) => {
       merchantName: merchants.name,
       merchantLogo: merchants.logoUrl,
       fidelityPoints: customerCards.fidelityPoints,
-      mealVoucherBalance: customerCards.mealVoucherBalance,
       lifetimePoints: customerCards.lifetimePoints,
-      mealVoucherTotal: customerCards.mealVoucherTotal,
       lastVisitAt: customerCards.lastVisitAt,
     })
     .from(customerCards)
@@ -142,9 +138,6 @@ clientRoutes.get('/cards/:merchantId', async (c) => {
       id: merchants.id,
       name: merchants.name,
       logoUrl: merchants.logoUrl,
-      address: merchants.address,
-      lat: merchants.lat,
-      lng: merchants.lng,
     })
     .from(merchants)
     .where(eq(merchants.id, merchantId))
@@ -165,13 +158,8 @@ clientRoutes.get('/cards/:merchantId', async (c) => {
     merchantId: merchant.id,
     merchantName: merchant.name,
     merchantLogo: merchant.logoUrl ?? null,
-    merchantAddress: merchant.address ?? null,
-    merchantLat: merchant.lat ?? null,
-    merchantLng: merchant.lng ?? null,
     fidelityPoints: existing?.fidelityPoints ?? 0,
-    mealVoucherBalance: existing?.mealVoucherBalance ?? 0,
     lifetimePoints: existing?.lifetimePoints ?? 0,
-    mealVoucherTotal: existing?.mealVoucherTotal ?? 0,
     lastVisitAt: existing?.lastVisitAt ?? null,
   }
 
@@ -279,9 +267,6 @@ clientRoutes.get('/merchants', async (c) => {
       id: merchants.id,
       name: merchants.name,
       logoUrl: merchants.logoUrl,
-      address: merchants.address,
-      lat: merchants.lat,
-      lng: merchants.lng,
     })
     .from(merchants)
     .orderBy(merchants.name)

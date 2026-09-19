@@ -15,15 +15,13 @@ export type Route =
   | 'staff'
   | 'rewards'
   | 'business-profile'
-  | 'partners'
   | 'transactions'
-  | 'notifications'
   | 'points'
 
 const NAMED_ROUTES: Route[] = [
   'home', 'register', 'forgot-password', 'about',
   'settings', 'oauth-callback', 'qr', 'cards', 'scan',
-  'dashboard', 'staff', 'rewards', 'business-profile', 'partners', 'transactions', 'notifications', 'points',
+  'dashboard', 'staff', 'rewards', 'business-profile', 'transactions', 'points',
 ]
 
 const PREFIX_ROUTES = ['admin', 'card']

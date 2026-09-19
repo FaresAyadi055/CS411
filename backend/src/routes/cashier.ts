@@ -13,18 +13,24 @@ import type { AppVariables } from '../types/app'
 export const cashierRoutes = new Hono<{ Variables: AppVariables }>()
 
 cashierRoutes.use('*', requireAuth())
-cashierRoutes.use('*', requireRole('cashier', 'business'))
+cashierRoutes.use('*', requireRole('business'))
 
 const verifySchema = z.object({
-  qrPayload: z.string().min(1),
-})
+  qrPayload: z.string().min(1).optional(),
+  customerId: z.string().min(1).optional(),
+}).refine((d) => d.qrPayload || d.customerId, { message: 'qrPayload or customerId required' })
 
 cashierRoutes.post('/verify', zValidator('json', verifySchema), async (c) => {
   const userId = c.get('userId')!
-  const { qrPayload } = c.req.valid('json')
+  const { qrPayload, customerId } = c.req.valid('json')
 
   try {
-    const result = await verifyQr(qrPayload, userId)
+    if (customerId) {
+      const { verifyQrByCustomerId } = await import('../services/stamp')
+      const result = await verifyQrByCustomerId(customerId, qrPayload ?? '', userId)
+      return c.json(result)
+    }
+    const result = await verifyQr(qrPayload!, userId)
     return c.json(result)
   } catch (err) {
     if (err instanceof AppError) {
@@ -37,7 +43,6 @@ cashierRoutes.post('/verify', zValidator('json', verifySchema), async (c) => {
 
 const adjustSchema = z.object({
   customerId: z.string().min(1),
-  balanceType: z.enum(['fidelity', 'meal_voucher']),
   amount: z
     .number()
     .refine((v) => v !== 0, 'Amount cannot be zero')
@@ -46,10 +51,10 @@ const adjustSchema = z.object({
 
 cashierRoutes.post('/adjust', zValidator('json', adjustSchema), async (c) => {
   const userId = c.get('userId')!
-  const { customerId, balanceType, amount } = c.req.valid('json')
+  const { customerId, amount } = c.req.valid('json')
 
   try {
-    const result = await adjustBalance(userId, customerId, balanceType, amount)
+    const result = await adjustBalance(userId, customerId, amount)
     return c.json({ success: true, ...result })
   } catch (err) {
     if (err instanceof AppError) {
@@ -129,7 +134,7 @@ cashierRoutes.post('/redeem', zValidator('json', redeemSchema), async (c) => {
       return c.json({ error: 'Reward not available', code: 'REWARD_NOT_FOUND' }, 404)
     }
 
-    const result = await adjustBalance(userId, customerId, 'fidelity', -reward.stampsCost, reward.id)
+    const result = await adjustBalance(userId, customerId, -reward.stampsCost, reward.id)
     return c.json({ success: true, ...result })
   } catch (err) {
     if (err instanceof AppError) {

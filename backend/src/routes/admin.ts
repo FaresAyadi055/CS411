@@ -63,7 +63,7 @@ adminRoutes.get('/users/:id', async (c) => {
 })
 
 const userPatchSchema = z.object({
-  role: z.enum(['client', 'cashier', 'business', 'admin']).optional(),
+  role: z.enum(['client', 'business', 'admin']).optional(),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   address: z.string().nullable().optional(),
@@ -278,7 +278,6 @@ adminRoutes.get('/merchants/:id/customers', async (c) => {
       phone: user.phone,
       email: user.email,
       fidelityPoints: customerCards.fidelityPoints,
-      mealVoucherBalance: customerCards.mealVoucherBalance,
       lifetimePoints: customerCards.lifetimePoints,
       lastVisitAt: customerCards.lastVisitAt,
     })
@@ -292,7 +291,6 @@ adminRoutes.get('/merchants/:id/customers', async (c) => {
     .select({
       customerId: stampTransactions.customerId,
       spentFidelity: sql<number>`coalesce(sum(case when ${stampTransactions.balanceType} = 'fidelity' and ${stampTransactions.type} in ('REMOVE_POINTS','REDEEM_REWARD') then ${stampTransactions.amount} else 0 end), 0)`,
-      spentMeal: sql<number>`coalesce(sum(case when ${stampTransactions.balanceType} = 'meal_voucher' and ${stampTransactions.type} = 'REMOVE_MEAL_VOUCHER' then ${stampTransactions.amount} else 0 end), 0)`,
     })
     .from(stampTransactions)
     .where(eq(stampTransactions.merchantId, merchantId))
@@ -301,7 +299,7 @@ adminRoutes.get('/merchants/:id/customers', async (c) => {
   const spentMap = new Map(spentRows.map((r) => [r.customerId, r]))
   const result = customers.map((cust) => {
     const s = spentMap.get(cust.customerId)
-    return { ...cust, spentFidelity: s?.spentFidelity ?? 0, spentMeal: s?.spentMeal ?? 0 }
+    return { ...cust, spentFidelity: s?.spentFidelity ?? 0 }
   })
 
   return c.json({ customers: result })
@@ -309,7 +307,6 @@ adminRoutes.get('/merchants/:id/customers', async (c) => {
 
 const adminAdjustSchema = z.object({
   customerId: z.string().min(1),
-  balanceType: z.literal('fidelity'),
   amount: z
     .number()
     .refine((v) => v !== 0, 'Amount cannot be zero')
@@ -319,10 +316,10 @@ const adminAdjustSchema = z.object({
 adminRoutes.post('/merchants/:id/adjust', zValidator('json', adminAdjustSchema), async (c) => {
   const merchantId = c.req.param('id')
   const actorId = c.get('userId')!
-  const { customerId, balanceType, amount } = c.req.valid('json')
+  const { customerId, amount } = c.req.valid('json')
 
   try {
-    const result = await adminAdjustBalance(actorId, merchantId, customerId, balanceType, amount)
+    const result = await adminAdjustBalance(actorId, merchantId, customerId, amount)
     return c.json({ success: true, ...result })
   } catch (err) {
     if (err instanceof AppError) {

@@ -1,22 +1,12 @@
 <script lang="ts">
-  import L from 'leaflet'
-  import 'leaflet/dist/leaflet.css'
-  import { onMount, tick } from 'svelte'
-  import { ArrowLeft, Star, Gift, MapPin, Clock, Info, ExternalLink } from '@lucide/svelte'
+  import { onMount } from 'svelte'
+  import { ArrowLeft, Star, Gift, Clock } from '@lucide/svelte'
   import { t } from '../lib/i18n.svelte'
   import { navigate, getRouteParams } from '../stores/router.svelte'
   import api from '../lib/api'
   import { showToast } from '../stores/toast.svelte'
   import type { StoreCard } from '../lib/types'
   import StarBadge from '../components/StarBadge.svelte'
-
-  const pinIcon = L.divIcon({
-    className: 'fidelito-pin',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="#16a34a" stroke="#ffffff" stroke-width="1.5"><path d="M12 2c-3.87 0-7 3.13-7 7 0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5" fill="#ffffff"/></svg>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -30],
-  })
 
   type Reward = {
     id: string
@@ -30,8 +20,6 @@
   type Tx = {
     id: string
     type: string
-    balanceType: 'fidelity' | 'meal_voucher'
-    rewardId: string | null
     amount: number
     createdAt: number
   }
@@ -43,9 +31,6 @@
   let transactions = $state<Tx[]>([])
   let rewards = $state<Reward[]>([])
   let loading = $state(true)
-
-  let mapEl = $state<HTMLDivElement | null>(null)
-  let map: L.Map | null = null
 
   let subscribing = $state(false)
   let isSubscribed = $state(false)
@@ -64,13 +49,10 @@
       isSubscribed = data.isSubscribed ?? false
     } catch {}
     loading = false
-    await tick()
-    createMap()
   }
 
   onMount(() => {
     load()
-    return () => { map?.remove() }
   })
 
   async function subscribeToMerchant() {
@@ -87,26 +69,6 @@
     }
   }
 
-  function createMap() {
-    if (!mapEl || !card) return
-    const lat = card.merchantLat
-    const lng = card.merchantLng
-    if (typeof lat !== 'number' || typeof lng !== 'number') return
-    map = L.map(mapEl).setView([lat, lng], 15)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map)
-    L.marker([lat, lng], { icon: pinIcon }).addTo(map)
-    setTimeout(() => map?.invalidateSize(), 200)
-  }
-
-  function formatTND(amount: number) {
-    return new Intl.NumberFormat('en-US', {
-      minimumFractionDigits: 3,
-      maximumFractionDigits: 3,
-    }).format(amount)
-  }
-
   function formatDate(ts: number): string {
     return new Date(ts).toLocaleDateString('en-US', {
       month: 'short',
@@ -117,28 +79,8 @@
   }
 
   function isEarned(type: string) {
-    return type === 'ADD_POINTS' || type === 'ADD_MEAL_VOUCHER'
+    return type === 'ADD_POINTS'
   }
-
-  function isIOS(): boolean {
-    if (typeof navigator === 'undefined') return false
-    const ua = navigator.userAgent
-    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1)
-  }
-
-  let mapsUrl = $derived.by(() => {
-    const c = card
-    if (!c) return ''
-    const lat = c.merchantLat
-    const lng = c.merchantLng
-    const coords = typeof lat === 'number' && typeof lng === 'number' ? `${lat},${lng}` : ''
-    const q = coords || c.merchantAddress?.trim() || ''
-    if (!q) return ''
-    const enc = encodeURIComponent(q)
-    return isIOS()
-      ? `https://maps.apple.com/?q=${enc}`
-      : `https://www.google.com/maps/search/?api=1&query=${enc}`
-  })
 </script>
 
 <main class="pb-28 px-4 pt-4 max-w-lg mx-auto">
@@ -163,25 +105,14 @@
         {/if}
       </div>
       <h1 class="text-lg font-bold">{card.merchantName || 'Partner'}</h1>
-      {#if card.merchantAddress}
-        <p class="text-xs text-on-surface-variant mt-1 flex items-center justify-center gap-1">
-          <MapPin size={12} />
-          {card.merchantAddress}
-        </p>
-      {/if}
     </div>
 
     {#if isSubscribed}
-      <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="grid grid-cols-1 gap-3 mb-4">
         <div class="card p-4 text-center animate-slide-up">
           <p class="text-xs text-on-surface-variant mb-1">{t('cards.balance_points')}</p>
           <p class="text-2xl font-bold text-primary">{card.fidelityPoints}</p>
           <p class="text-[10px] text-on-surface-variant">{t('transactions.fidelity')}</p>
-        </div>
-        <div class="card p-4 text-center animate-slide-up" style="animation-delay: 40ms">
-          <p class="text-xs text-on-surface-variant mb-1">{t('cards.balance_meal')}</p>
-          <p class="text-2xl font-bold text-primary">{formatTND(card.mealVoucherBalance)}</p>
-          <p class="text-[10px] text-on-surface-variant">TND {t('transactions.meal')}</p>
         </div>
       </div>
     {:else}
@@ -231,26 +162,6 @@
       {/if}
     </div>
 
-    {#if typeof card.merchantLat === 'number' && typeof card.merchantLng === 'number'}
-      <div class="card p-3 mb-4 animate-slide-up">
-        <div class="flex items-center gap-2 mb-2 text-sm font-semibold">
-          <MapPin size={16} class="text-primary" />
-          {t('cards.location')}
-        </div>
-        <div class="h-56 rounded-xl overflow-hidden border border-outline isolate" bind:this={mapEl}></div>
-        {#if mapsUrl}
-          <a
-            href={mapsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="btn btn-secondary w-full mt-3"
-          >
-            <ExternalLink size={16} class="mr-2" />{t('business.profile.view_on_maps')}
-          </a>
-        {/if}
-      </div>
-    {/if}
-
     <h2 class="text-sm font-semibold mb-3">{t('card.history')}</h2>
     {#if transactions.length === 0}
       <div class="card p-6 text-center">
@@ -273,7 +184,6 @@
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium">
                 {isEarned(tx.type) ? t('transactions.earned') : t('transactions.spent')}
-                {tx.balanceType === 'meal_voucher' ? ' · TND' : ''}
               </p>
               <p class="text-xs text-on-surface-variant flex items-center gap-1">
                 <Clock size={10} />
@@ -284,7 +194,7 @@
               class="text-sm font-semibold"
               class:text-found-text={isEarned(tx.type)}
               class:text-lost-text={!isEarned(tx.type)}>
-              {isEarned(tx.type) ? '+' : '-'}{tx.balanceType === 'meal_voucher' ? formatTND(tx.amount) : tx.amount}
+              {isEarned(tx.type) ? '+' : '-'}{tx.amount}
             </span>
           </div>
         {/each}
@@ -295,7 +205,7 @@
       <p class="text-sm text-on-surface-variant">{t('partners.not_member')}</p>
       <div class="flex items-center justify-center gap-2 mt-4">
         <button
-          onclick={() => navigate('partners')}
+          onclick={() => navigate('cards')}
           class="px-4 py-2 rounded-xl bg-surface-container-high text-on-surface text-sm font-medium"
         >
           {t('nav.partners')}

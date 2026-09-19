@@ -142,10 +142,8 @@
     phone: string | null
     email: string
     fidelityPoints: number
-    mealVoucherBalance: number
     lifetimePoints: number
     spentFidelity: number
-    spentMeal: number
     lastVisitAt: number | null
   }
 
@@ -456,11 +454,9 @@
                   </td>
                   <td class="px-3 py-2.5 text-right whitespace-nowrap">
                     <div class="text-primary font-semibold">{c.fidelityPoints} <span class="text-[10px] font-normal text-on-surface-variant">{t('admin.customer.fidelity')}</span></div>
-                    <div class="font-semibold">{c.mealVoucherBalance} <span class="text-[10px] font-normal text-on-surface-variant">{t('admin.customer.meal')}</span></div>
                   </td>
                   <td class="px-3 py-2.5 text-right whitespace-nowrap">
                     <div class="text-on-surface-variant">{c.spentFidelity} <span class="text-[10px]">{t('admin.customer.fidelity')}</span></div>
-                    <div class="text-on-surface-variant">{c.spentMeal} <span class="text-[10px]">{t('admin.customer.meal')}</span></div>
                   </td>
                 </tr>
               {/each}

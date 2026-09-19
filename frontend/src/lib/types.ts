@@ -2,34 +2,20 @@ export type Locale = 'en' | 'fr' | 'ar'
 
 export interface UserProfile {
   id: string
-  role: 'client' | 'cashier' | 'business' | 'admin'
+  role: 'client' | 'business' | 'admin'
   firstName?: string | null
   lastName?: string | null
   phone?: string | null
   email: string
   address?: string | null
   locale?: string | null
-  notificationsEnabled?: boolean
   createdAt?: string
   lastUpdated?: string
 }
 
-export type NotificationType =
-  | 'points_earned'
-  | 'meal_earned'
-  | 'points_spent'
-  | 'meal_spent'
-  | 'reward_redeemed'
 
-export interface AppNotification {
-  id: string
-  type: NotificationType
-  data: { amount?: number; rewardId?: string }
-  isRead: boolean
-  createdAt: number
-  merchantName: string | null
-  merchantLogo: string | null
-}
+// (NotificationType, AppNotification removed for demo)
+// (StaffMember removed for demo)
 
 export interface Merchant {
   id: string
@@ -42,9 +28,6 @@ export interface Merchant {
   pointsBalance: number
   pointsFunded: number
   isActive: boolean
-  address?: string | null
-  lat?: number | null
-  lng?: number | null
   createdAt: number
   updatedAt: number
 }
@@ -56,9 +39,7 @@ export interface CustomerCard {
   merchantName?: string
   merchantLogo?: string | null
   fidelityPoints: number
-  mealVoucherBalance: number
   lifetimePoints: number
-  mealVoucherTotal: number
   lastVisitAt?: number | null
   createdAt: number
   updatedAt: number
@@ -94,9 +75,7 @@ export interface StampTransaction {
 
 export interface DashboardStats {
   totalPointsAdded: number
-  totalMealVoucherAdded: number
   pointsRedeemed: number
-  mealVoucherRedeemed: number
   redemptionsCount: number
   uniqueCustomers: number
   newCustomersThisWeek: number
@@ -115,14 +94,12 @@ export interface DashboardStats {
     firstName: string | null
     lastName: string | null
     fidelityPoints: number
-    mealVoucherBalance: number
     lifetimePoints: number
   }>
   topRewards: Array<{ rewardId: string; title: string; redemptions: number }>
   recentTransactions: Array<{
     id: string
     type: string
-    balanceType: 'fidelity' | 'meal_voucher'
     amount: number
     createdAt: number
     customerName: string
@@ -131,18 +108,8 @@ export interface DashboardStats {
 }
 
 
-export interface StaffMember {
-  id: string
-  userId: string
-  role: 'owner' | 'cashier'
-  createdAt: number
-  firstName?: string | null
-  lastName?: string | null
-  email: string
-  pointsAwarded?: number
-  mealAwarded?: number
-  transactionCount?: number
-}
+
+// (StaffMember removed for demo)
 
 export interface AdminStats {
   users: number
@@ -153,7 +120,7 @@ export interface AdminStats {
 
 export interface AdminUser {
   id: string
-  role: 'client' | 'cashier' | 'business' | 'admin'
+  role: 'client' | 'business' | 'admin'
   firstName?: string | null
   lastName?: string | null
   email: string
@@ -179,12 +146,7 @@ export interface StoreCard {
   merchantId: string
   merchantName: string | null
   merchantLogo: string | null
-  merchantAddress: string | null
-  merchantLat: number | null
-  merchantLng: number | null
   fidelityPoints: number
-  mealVoucherBalance: number
   lifetimePoints: number
-  mealVoucherTotal: number
   lastVisitAt: number | null
 }

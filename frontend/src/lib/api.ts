@@ -1,5 +1,5 @@
-let BASE = import.meta.env.VITE_API_URL
-if (!BASE) BASE = ''
+let BASE = import.meta.env.VITE_API_URL ?? ''
+console.log('API BASE:', BASE)
 
 export function getApiBase() {
   return BASE
@@ -116,7 +116,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     }
   }
 
-  const creds: RequestCredentials = options.credentials ?? (_authed ? 'include' : 'omit')
+  const creds: RequestCredentials = 'include'
 
   let res: Response
   try {

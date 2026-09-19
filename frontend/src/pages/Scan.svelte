@@ -1,6 +1,6 @@
 ﻿<script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte'
-  import { ScanLine, Camera, CheckCircle2, AlertCircle, Pause, Plus, Pencil, Delete, ChevronDown, Gift } from '@lucide/svelte'
+  import { ScanLine, Camera, CheckCircle2, AlertCircle, Pause, Plus, ChevronDown, Gift } from '@lucide/svelte'
   import { t } from '../lib/i18n.svelte'
   import api from '../lib/api'
   import type { Merchant } from '../lib/types'
@@ -14,7 +14,7 @@
   let scanning = $state(false)
   let cameraError = $state('')
   
-  type CardBalances = { fidelityPoints: number; mealVoucherBalance: number; lifetimePoints: number; mealVoucherTotal: number }
+  type CardBalances = { fidelityPoints: number; lifetimePoints: number }
   type Reward = { id: string; title: string; description: string | null; stampsCost: number; imageUrl?: string | null }
   let verifyResult = $state<{ customerId: string, customerName: string } | null>(null)
   let card = $state<CardBalances | null>(null)
@@ -38,15 +38,9 @@
   let showManual = $state(false)
   let manualPayload = $state('')
 
-  // Meal voucher editor
-  let editingMeal = $state(false)
-  let mealMode = $state<'add' | 'spend'>('add')
-  let amountStr = $state('0')
-
   const round3 = (n: number) => Math.round(n * 1000) / 1000
   let fidelityDirty = $derived(card && serverCard && Math.abs(card.fidelityPoints - serverCard.fidelityPoints) > 0.0005)
-  let mealDirty = $derived(card && serverCard && Math.abs(card.mealVoucherBalance - serverCard.mealVoucherBalance) > 0.0005)
-  let hasPending = $derived(fidelityDirty || mealDirty)
+  let hasPending = $derived(fidelityDirty)
   let merchantOutOfPoints = $derived((getBusinessPoints() ?? 1) <= 0)
 
   onMount(async () => { await refreshMerchant() })
@@ -85,7 +79,7 @@
     try {
       const d = await api.post<any>('/api/cashier/verify', { qrPayload })
       verifyResult = { customerId: d.customerId, customerName: d.customerName }
-      card = { fidelityPoints: d.fidelityPoints, mealVoucherBalance: d.mealVoucherBalance, lifetimePoints: d.lifetimePoints, mealVoucherTotal: d.mealVoucherTotal }
+      card = { fidelityPoints: d.fidelityPoints, lifetimePoints: d.lifetimePoints }
       serverCard = { ...card }
       try {
         const rd = await api.get<{ rewards: Reward[] }>('/api/cashier/rewards')
@@ -109,31 +103,13 @@
     card.lifetimePoints = round3(card.lifetimePoints + 1)
   }
 
-  function startMealEdit() { editingMeal = true; mealMode = 'add'; amountStr = '0' }
-  function cancelMealEdit() { editingMeal = false; amountStr = '' }
-  function saveMealEdit() {
-    if (!card || !serverCard) return
-    const amt = parseFloat(amountStr) || 0
-    if (amt <= 0) return
-    const signed = mealMode === 'add' ? amt : -amt
-    if (mealMode === 'spend' && Math.abs(signed) > serverCard.mealVoucherBalance) return
-    card.mealVoucherBalance = round3(serverCard.mealVoucherBalance + signed)
-    if (mealMode === 'add') card.mealVoucherTotal = round3(serverCard.mealVoucherTotal + amt)
-    editingMeal = false
-  }
-
   async function commitChanges() {
     if (!verifyResult || !card || !serverCard || committing || !hasPending) return
     committing = true; adjustError = ''
     try {
       if (fidelityDirty && card && serverCard) {
         const delta = round3(card.fidelityPoints - serverCard.fidelityPoints)
-        const r = await api.post<CardBalances>('/api/cashier/adjust', { customerId: verifyResult.customerId, balanceType: 'fidelity', amount: delta })
-        applyServer(r)
-      }
-      if (mealDirty && card && serverCard) {
-        const delta = round3(card.mealVoucherBalance - serverCard.mealVoucherBalance)
-        const r = await api.post<CardBalances>('/api/cashier/adjust', { customerId: verifyResult.customerId, balanceType: 'meal_voucher', amount: delta })
+        const r = await api.post<CardBalances>('/api/cashier/adjust', { customerId: verifyResult.customerId, amount: delta })
         applyServer(r)
       }
       successFlash = true; setTimeout(() => successFlash = false, 2000)
@@ -142,12 +118,12 @@
   }
 
   function applyServer(r: CardBalances) {
-    card = { fidelityPoints: r.fidelityPoints, mealVoucherBalance: r.mealVoucherBalance, lifetimePoints: r.lifetimePoints, mealVoucherTotal: r.mealVoucherTotal }
+    card = { fidelityPoints: r.fidelityPoints, lifetimePoints: r.lifetimePoints }
     serverCard = { ...card }
   }
 
   function cancelEdits() { if (card && serverCard) card = { ...serverCard } }
-  function resetAll() { verifyResult = null; card = null; serverCard = null; editingMeal = false; amountStr = ''; adjustError = ''; verifyError = ''; merchantRewards = []; showRewards = false; redeemingRewardId = null }
+  function resetAll() { verifyResult = null; card = null; serverCard = null; adjustError = ''; verifyError = ''; merchantRewards = []; showRewards = false; redeemingRewardId = null }
 
   async function redeemReward(reward: Reward) {
     if (!verifyResult || redeemingRewardId) return
@@ -199,7 +175,7 @@
       </form>
     </div>
 
-  {:else if verifyResult && !editingMeal}
+  {:else if verifyResult}
     <div class="card p-6 animate-scale-in">
       <div class="text-center mb-6">
         <CheckCircle2 size={48} class="text-green-600 mx-auto mb-2" />
@@ -211,7 +187,7 @@
 {#if adjustError}<p class="text-lost-text text-sm mb-4">{adjustError}</p>{/if}
       {#if successFlash}<p class="text-green-600 text-sm mb-4">{t('scan.adjust_success')}</p>{/if}
 
-      {#if fidelityDirty || mealDirty}
+      {#if fidelityDirty}
         <div class="mb-4 text-center text-sm font-medium">
           {#if fidelityDirty && card && serverCard}
             <span>
@@ -221,31 +197,15 @@
               </span>
             </span>
           {/if}
-          {#if mealDirty && card && serverCard}
-            <span class="mx-2">|</span>
-            <span>
-              {t('scan.meal_voucher')}: 
-              <span class={card.mealVoucherBalance - serverCard.mealVoucherBalance > 0 ? 'text-green-600' : card.mealVoucherBalance - serverCard.mealVoucherBalance < 0 ? 'text-red-600' : 'text-gray-500'}>
-                {card.mealVoucherBalance - serverCard.mealVoucherBalance > 0 ? '+' : ''}{ (card.mealVoucherBalance - serverCard.mealVoucherBalance).toFixed(3) }
-              </span>
-            </span>
-          {/if}
         </div>
       {/if}
 
-      <div class="grid grid-cols-2 gap-3 mb-6">
+      <div class="mb-6">
         <div class="balance-card fidelity flex flex-col items-center p-4 bg-amber-100">
           <p class="balance-label">{t('scan.fidelity_points')}</p>
           <p class="balance-value text-3xl font-bold">{card?.fidelityPoints}</p>
           <button class="mt-3 w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center" onclick={addFidelityPoint} disabled={committing}>
             <Plus size={20} />
-          </button>
-        </div>
-        <div class="balance-card meal flex flex-col items-center p-4 bg-emerald-100">
-          <p class="balance-label">{t('scan.meal_voucher')}</p>
-          <p class="balance-value text-3xl font-bold">{card?.mealVoucherBalance.toFixed(3)}</p>
-          <button class="mt-3 btn btn-secondary btn-sm" onclick={startMealEdit} disabled={committing}>
-            <Pencil size={14} class="mr-1"/> {t('scan.edit')}
           </button>
         </div>
       </div>
@@ -290,29 +250,6 @@
         <button onclick={cancelEdits} class="btn btn-ghost w-full mt-2">{t('common.cancel')}</button>
       {/if}
       <button onclick={() => { resetAll(); startScanner() }} class="btn btn-secondary w-full mt-4">{t('scan.scan_another')}</button>
-    </div>
-
-  {:else if verifyResult && editingMeal}
-    <div class="card p-6 animate-slide-up">
-      <div class="flex justify-between items-center mb-6">
-        <h2 class="font-bold">{t('scan.meal_voucher')}</h2>
-        <button class="btn btn-ghost" onclick={cancelMealEdit}><Delete size={20}/></button>
-      </div>
-      <div class="text-4xl font-mono text-center mb-8">{mealMode === 'spend' ? '-' : '+'}{amountStr} TND</div>
-      <div class="flex bg-surface-container rounded-lg p-1 mb-6">
-        <button class="flex-1 py-2 rounded-md" class:bg-primary={mealMode==='add'} onclick={() => mealMode='add'}>{t('scan.add')}</button>
-        <button class="flex-1 py-2 rounded-md" class:bg-primary={mealMode==='spend'} onclick={() => mealMode='spend'}>{t('scan.spend')}</button>
-      </div>
-      <div class="grid grid-cols-3 gap-2 mb-6">
-        {#each ['1','2','3','4','5','6','7','8','9','.', '0', '⌫'] as key}
-          <button class="h-14 bg-surface-container rounded-lg font-bold" onclick={() => {
-            if (key === '⌫') amountStr = amountStr.slice(0, -1) || '0'
-            else if (key === '.' && amountStr.includes('.')) {}
-            else amountStr = amountStr === '0' && key !== '.' ? key : amountStr + key
-          }}>{key}</button>
-        {/each}
-      </div>
-      <button class="btn btn-primary w-full" onclick={saveMealEdit}>{t('scan.save')}</button>
     </div>
 
   {:else}

@@ -45,6 +45,7 @@ export const BINDING_KEYS = [
   'FRONTEND_URL',
   'USE_LOCAL_DB',
   'COOKIE_SAMESITE',
+  'JWT_SECRET',
   'VAPID_PUBLIC_KEY',
   'VAPID_PRIVATE_KEY',
   'VAPID_SUBJECT',
@@ -186,5 +187,8 @@ export const env = {
     const v = (readBinding('COOKIE_SAMESITE') ?? 'strict').toLowerCase()
     if (v === 'lax' || v === 'none') return v
     return 'strict'
+  },
+  get jwtSecret() {
+    return readBinding('JWT_SECRET') || 'dev-only-jwt-secret-min-32-chars!!'
   },
 }

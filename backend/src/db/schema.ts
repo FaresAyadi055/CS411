@@ -91,19 +91,17 @@ export const jwks = sqliteTable('jwks', {
     .$defaultFn(() => new Date()),
 })
 
-/** App profile joined to a Better Auth user. Role lives here and is mirrored onto sessions. */
 export const user = sqliteTable('user', {
   id: text('id')
     .primaryKey()
     .references(() => authUsers.id, { onDelete: 'cascade' }),
-  role: text('role', { enum: ['client', 'cashier', 'business', 'admin'] }).notNull().default('client'),
+  role: text('role', { enum: ['client', 'business', 'admin'] }).notNull().default('client'),
   firstName: text('first_name'),
   lastName: text('last_name'),
   phone: text('phone'),
   email: text('email').notNull().unique(),
   address: text('address'),
   locale: text('locale').default('en'),
-  notificationsEnabled: integer('notifications_enabled', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').$defaultFn(() => new Date().toISOString()),
   lastUpdated: text('last_updated').$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
@@ -111,47 +109,15 @@ export const user = sqliteTable('user', {
   roleIdx: index('user_role_idx').on(table.role),
 }))
 
-/** Per-IP request logging used by the HTTP rate limiter. */
 export const rateLimitLog = sqliteTable('rate_limit_log', {
   id: text('id').primaryKey(),
   ipAddress: text('ip_address').notNull(),
   reason: text('reason').notNull(),
   triggeredAt: text('triggered_at').$defaultFn(() => new Date().toISOString()),
-  isResolved: integer('is_resolved').default(0),
+  isResolved: integer('is_resolved', { mode: 'boolean' }).notNull().default(false),
 }, (table) => ({
-  ipIdx: index('rate_limit_ip_idx').on(table.ipAddress),
-  triggeredIdx: index('rate_limit_triggered_idx').on(table.triggeredAt),
-}))
-
-// NOTE: `apikey` is currently UNUSED — no route or service issues API-key auth.
-// Wired into Better Auth via `plugins: [apiKey()]` in auth.ts but dormant. Remove the
-// plugin + this table, or implement merchant API keys, before relying on it.
-export const apikey = sqliteTable('apikey', {
-  id: text('id').primaryKey(),
-  configId: text('config_id').notNull(),
-  name: text('name'),
-  start: text('start'),
-  referenceId: text('reference_id').notNull(),
-  prefix: text('prefix'),
-  key: text('key').notNull(),
-  refillInterval: integer('refill_interval'),
-  refillAmount: integer('refill_amount'),
-  lastRefillAt: integer('last_refill_at', { mode: 'timestamp_ms' }),
-  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-  rateLimitEnabled: integer('rate_limit_enabled', { mode: 'boolean' }).notNull().default(true),
-  rateLimitTimeWindow: integer('rate_limit_time_window'),
-  rateLimitMax: integer('rate_limit_max'),
-  requestCount: integer('request_count').notNull().default(0),
-  remaining: integer('remaining'),
-  lastRequest: integer('last_request', { mode: 'timestamp_ms' }),
-  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-  permissions: text('permissions'),
-  metadata: text('metadata'),
-}, (table) => ({
-  refIdx: index('apikey_ref_idx').on(table.referenceId),
-  keyIdx: index('apikey_key_idx').on(table.key),
+  ipAddressIdx: index('rl_ip_idx').on(table.ipAddress),
+  triggeredAtIdx: index('rl_triggered_at_idx').on(table.triggeredAt),
 }))
 
 // --- Loyalty Platform Tables ---
@@ -162,9 +128,6 @@ export const merchants = sqliteTable('merchants', {
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
   logoUrl: text('logo_url'),
-  lat: real('lat'),
-  lng: real('lng'),
-  address: text('address'),
   stampsPerReward: integer('stamps_per_reward').notNull().default(10),
   planTier: text('plan_tier', { enum: ['starter', 'growth', 'pro'] }).notNull().default('starter'),
   pointsBalance: integer('points_balance').notNull().default(0),
@@ -187,9 +150,6 @@ export const merchantPublic = {
   name: merchants.name,
   slug: merchants.slug,
   logoUrl: merchants.logoUrl,
-  lat: merchants.lat,
-  lng: merchants.lng,
-  address: merchants.address,
   stampsPerReward: merchants.stampsPerReward,
   planTier: merchants.planTier,
   pointsBalance: merchants.pointsBalance,
@@ -203,7 +163,7 @@ export const merchantStaff = sqliteTable('merchant_staff', {
   id: text('id').primaryKey(),
   merchantId: text('merchant_id').notNull().references(() => merchants.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-  role: text('role').notNull().default('cashier'),
+  role: text('role').notNull().default('business'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
 }, (table) => ({
   merchantIdx: index('staff_merchant_idx').on(table.merchantId),
@@ -219,9 +179,7 @@ export const customerCards = sqliteTable('customer_cards', {
   customerId: text('customer_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
   merchantId: text('merchant_id').notNull().references(() => merchants.id, { onDelete: 'cascade' }),
   fidelityPoints: integer('fidelity_points').notNull().default(0),
-  mealVoucherBalance: real('meal_voucher_balance').notNull().default(0),
   lifetimePoints: integer('lifetime_points').notNull().default(0),
-  mealVoucherTotal: real('meal_voucher_total').notNull().default(0),
   lastVisitAt: integer('last_visit_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
@@ -230,9 +188,7 @@ export const customerCards = sqliteTable('customer_cards', {
   merchantIdx: index('card_merchant_idx').on(table.merchantId),
   customerMerchantUnq: uniqueIndex('card_customer_merchant_unq').on(table.customerId, table.merchantId),
   chkFidelity: check('chk_fidelity_points', sql`${table.fidelityPoints} >= 0`),
-  chkMeal: check('chk_meal_voucher_balance', sql`${table.mealVoucherBalance} >= 0`),
   chkLifetime: check('chk_lifetime_points', sql`${table.lifetimePoints} >= 0`),
-  chkMealTotal: check('chk_meal_voucher_total', sql`${table.mealVoucherTotal} >= 0`),
 }))
 
 export const rewards = sqliteTable('rewards', {
@@ -253,8 +209,8 @@ export const stampTransactions = sqliteTable('stamp_transactions', {
   merchantId: text('merchant_id').notNull().references(() => merchants.id, { onDelete: 'cascade' }),
   customerId: text('customer_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
   cashierId: text('cashier_id').notNull().references(() => authUsers.id, { onDelete: 'restrict' }),
-  type: text('type', { enum: ['ADD_POINTS', 'REMOVE_POINTS', 'ADD_MEAL_VOUCHER', 'REMOVE_MEAL_VOUCHER'] }).notNull(),
-  balanceType: text('balance_type', { enum: ['fidelity', 'meal_voucher'] }).notNull(),
+  type: text('type', { enum: ['ADD_POINTS', 'REMOVE_POINTS'] }).notNull(),
+  balanceType: text('balance_type', { enum: ['fidelity'] }).notNull().default('fidelity'),
   rewardId: text('reward_id').references(() => rewards.id, { onDelete: 'set null' }),
   amount: real('amount').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
@@ -274,42 +230,19 @@ export const usedQrSignatures = sqliteTable('used_qr_signatures', {
   expiresIdx: index('used_qr_exp_idx').on(table.expiresAt),
 }))
 
-/** A customer is auto-subscribed to a merchant the first time they earn a point there. */
 export const merchantSubscriptions = sqliteTable('merchant_subscriptions', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
   merchantId: text('merchant_id').notNull().references(() => merchants.id, { onDelete: 'cascade' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  userMerchantUnq: uniqueIndex('sub_user_merchant_unq').on(table.userId, table.merchantId),
+  userIdx: index('msub_user_idx').on(table.userId),
+  merchantIdx: index('msub_merchant_idx').on(table.merchantId),
+  userMerchantUnq: uniqueIndex('msub_user_merchant_unq').on(table.userId, table.merchantId),
 }))
 
-/** In-app notifications, one per relevant event (e.g. a loyalty transaction). */
-export const notifications = sqliteTable('notifications', {
-  id: text('id').primaryKey(),
-  userId: text('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-  merchantId: text('merchant_id').references(() => merchants.id, { onDelete: 'cascade' }),
-  type: text('type').notNull(),
-  data: text('data'),
-  isRead: integer('is_read', { mode: 'boolean' }).notNull().default(false),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
-}, (table) => ({
-  userIdx: index('notif_user_idx').on(table.userId),
-  userCreatedIdx: index('notif_user_created_idx').on(table.userId, table.createdAt),
-}))
-
-/** Web Push subscriptions for a user's devices (used by future server-side push delivery). */
-export const pushSubscriptions = sqliteTable('push_subscriptions', {
-  id: text('id').primaryKey(),
-  userId: text('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-  endpoint: text('endpoint').notNull(),
-  p256dh: text('p256dh').notNull(),
-  auth: text('auth').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
-}, (table) => ({
-  endpointUnq: uniqueIndex('push_endpoint_unq').on(table.endpoint),
-  userIdx: index('push_user_idx').on(table.userId),
-}))
+// --- Loyalty Platform Tables ---
+// (notifications, pushSubscriptions tables removed for demo)
 
 /** Schema object passed to Better Auth drizzle adapter */
 export const authSchema = {
@@ -318,5 +251,4 @@ export const authSchema = {
   account,
   verification,
   jwks,
-  apikey,
 }

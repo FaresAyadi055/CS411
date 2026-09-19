@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import {
-    TrendingUp, TrendingDown, Minus, Users, Gift, Coins, UtensilsCrossed,
+import {
+    TrendingUp, TrendingDown, Minus, Users, Gift, Coins,
     Repeat2, Clock, RefreshCw, ArrowUpRight, Trophy,
     AlertCircle, Sparkles, X,
   } from '@lucide/svelte'
@@ -271,19 +271,16 @@
   }
 
   function isEarnType(type: string) {
-    return type === 'ADD_POINTS' || type === 'ADD_MEAL_VOUCHER'
+    return type === 'ADD_POINTS'
   }
 
   function txLabel(tx: DashboardStats['recentTransactions'][number]) {
     if (tx.rewardTitle) return tx.rewardTitle
-    return tx.balanceType === 'meal_voucher' ? t('dashboard.meal_voucher') : t('dashboard.points')
+    return t('dashboard.points')
   }
 
   function formatAmount(tx: DashboardStats['recentTransactions'][number]) {
     const sign = isEarnType(tx.type) ? '+' : '-'
-    if (tx.balanceType === 'meal_voucher') {
-      return `${sign}${tx.amount.toFixed(3)}`
-    }
     return `${sign}${tx.amount}`
   }
 </script>
@@ -335,13 +332,6 @@
         <p class="text-xs text-on-surface-variant mt-0.5">{t('dashboard.points_issued')}</p>
       </div>
       <div class="card p-4 animate-slide-up hover-lift" style="animation-delay: 60ms">
-        <div class="w-9 h-9 rounded-full bg-secondary-container/40 flex items-center justify-center mb-2">
-          <UtensilsCrossed size={16} class="text-primary" />
-        </div>
-        <p class="text-2xl font-bold tabular-nums">{stats.totalMealVoucherAdded.toFixed(3)}</p>
-        <p class="text-xs text-on-surface-variant mt-0.5">{t('dashboard.meal_vouchers_issued')}</p>
-      </div>
-      <div class="card p-4 animate-slide-up hover-lift" style="animation-delay: 120ms">
         <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center mb-2">
           <Users size={16} class="text-primary" />
         </div>
@@ -350,11 +340,8 @@
           <p class="text-xs text-on-surface-variant">{t('dashboard.customers')}</p>
           <button class="text-xs text-primary font-medium" onclick={openCustomersModal}>{t('common.view')}</button>
         </div>
-        {#if stats.newCustomersThisWeek > 0}
-          <p class="text-[11px] text-found-text font-medium mt-1">{t('dashboard.new_this_week', { count: String(stats.newCustomersThisWeek) })}</p>
-        {/if}
       </div>
-      <div class="card p-4 animate-slide-up hover-lift" style="animation-delay: 180ms">
+      <div class="card p-4 animate-slide-up hover-lift" style="animation-delay: 120ms">
         <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center mb-2">
           <Gift size={16} class="text-primary" />
         </div>

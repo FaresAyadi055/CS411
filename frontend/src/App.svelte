@@ -3,37 +3,30 @@
   import './app.css'
   import { t, initLocale, setLocale, getLocale, locales } from './lib/i18n.svelte'
   import { initRouter, navigate, getRoute } from './stores/router.svelte'
-  import { checkSession, getUser, resolveOAuthSession } from './stores/auth.svelte'
+  import { checkSession, getUser } from './stores/auth.svelte'
   import { syncViewMode } from './stores/mode.svelte'
   import api, { setOnRequestError } from './lib/api'
-  import Home from './pages/Home.svelte'
   import Register from './pages/Register.svelte'
   import ForgotPassword from './pages/ForgotPassword.svelte'
   import Settings from './pages/Settings.svelte'
   import About from './pages/About.svelte'
   import NotFound from './pages/NotFound.svelte'
-  import OAuthCallback from './pages/OAuthCallback.svelte'
   import AdminDashboard from './pages/admin/Dashboard.svelte'
   import Qr from './pages/Qr.svelte'
   import Cards from './pages/Cards.svelte'
   import CardDetail from './pages/CardDetail.svelte'
   import Scan from './pages/Scan.svelte'
   import BizDashboard from './pages/BizDashboard.svelte'
-  import Staff from './pages/Staff.svelte'
   import Rewards from './pages/Rewards.svelte'
   import BusinessProfile from './pages/BusinessProfile.svelte'
   import Transactions from './pages/Transactions.svelte'
-  import Partners from './pages/Partners.svelte'
-  import Notifications from './pages/Notifications.svelte'
   import Points from './pages/Points.svelte'
   import TopBar from './components/TopBar.svelte'
   import BottomNav from './components/BottomNav.svelte'
   import Toast from './components/Toast.svelte'
   import Skeleton from './components/Skeleton.svelte'
-  import OnboardingPrompt from './components/OnboardingPrompt.svelte'
-  import { initPwa } from './lib/pwa.svelte'
-  import { showToast } from './stores/toast.svelte'
   import LocaleFlag from './components/LocaleFlag.svelte'
+  import { showToast } from './stores/toast.svelte'
 
   let ready = $state(false)
   let locale = $state(getLocale())
@@ -56,7 +49,7 @@
     } catch {}
   }
 
-  const noNavRoutes = ['register', 'forgot-password', 'oauth-callback', 'not-found']
+  const noNavRoutes = ['register', 'forgot-password', 'not-found']
 
   function showTopBar() {
     return !noNavRoutes.includes(getRoute())
@@ -70,15 +63,18 @@
     initLocale()
     locale = getLocale()
     initRouter()
+
     ready = true
     setOnRequestError((e) => showToast('error', e.message))
-    initPwa()
     checkSession()
-    window.addEventListener('message', (e) => {
-      if (e.data?.type === 'appbase:oauth-done' && e.source) {
-        resolveOAuthSession()
-      }
-    })
+  })
+
+  $effect(() => {
+    const u = getUser()
+    if (u && getRoute() === 'register') {
+      if (u.role === 'business') navigate('dashboard')
+      else navigate('qr')
+    }
   })
 </script>
 
@@ -121,10 +117,8 @@
   >
     <Toast />
 
-    {#if getRoute() === 'home'}
-      <Home />
-    {:else if getRoute() === 'register'}
-      <Register />
+    {#if getRoute() === 'register'}
+      <Register isRegisterPage={true} />
     {:else if getRoute() === 'forgot-password'}
       <ForgotPassword />
     {:else if getRoute() === 'about'}
@@ -133,96 +127,77 @@
       {#if getUser()}
         <Settings />
       {:else}
-        <Register />
+        <Register isRegisterPage={false} />
       {/if}
     {:else if getRoute() === 'admin'}
       {#if getUser()}
         <AdminDashboard />
       {:else}
-        <Register />
+        <Register isRegisterPage={false} />
       {/if}
     {:else if getRoute() === 'qr'}
       {#if getUser()}
         <Qr />
       {:else}
-        <Register />
+        <Register isRegisterPage={false} />
       {/if}
     {:else if getRoute() === 'cards'}
       {#if getUser()}
         <Cards />
       {:else}
-        <Register />
+        <Register isRegisterPage={false} />
       {/if}
     {:else if getRoute() === 'card'}
       {#if getUser()}
         <CardDetail />
       {:else}
-        <Register />
+        <Register isRegisterPage={false} />
       {/if}
     {:else if getRoute() === 'scan'}
       {#if getUser()}
         <Scan />
       {:else}
-        <Register />
+        <Register isRegisterPage={false} />
       {/if}
     {:else if getRoute() === 'dashboard'}
       {#if getUser()}
         <BizDashboard />
       {:else}
-        <Register />
-      {/if}
-    {:else if getRoute() === 'staff'}
-      {#if getUser()}
-        <Staff />
-      {:else}
-        <Register />
+        <Register isRegisterPage={false} />
       {/if}
     {:else if getRoute() === 'rewards'}
       {#if getUser()}
         <Rewards />
       {:else}
-        <Register />
+        <Register isRegisterPage={false} />
       {/if}
     {:else if getRoute() === 'business-profile'}
       {#if getUser()}
         <BusinessProfile />
       {:else}
-        <Register />
+        <Register isRegisterPage={false} />
       {/if}
     {:else if getRoute() === 'transactions'}
       {#if getUser()}
         <Transactions />
       {:else}
-        <Register />
-      {/if}
-    {:else if getRoute() === 'partners'}
-      {#if getUser()}
-        <Partners />
-      {:else}
-        <Register />
-      {/if}
-    {:else if getRoute() === 'notifications'}
-      {#if getUser()}
-        <Notifications />
-      {:else}
-        <Register />
+        <Register isRegisterPage={false} />
       {/if}
     {:else if getRoute() === 'points'}
       {#if getUser()}
         <Points />
       {:else}
-        <Register />
+        <Register isRegisterPage={false} />
       {/if}
-    {:else if getRoute() === 'oauth-callback'}
-      <OAuthCallback />
     {:else if getRoute() === 'not-found'}
       <NotFound />
+    {:else}
+      <Register isRegisterPage={false} />
     {/if}
   </div>
   {#if showBottomNav()}
     <BottomNav />
   {/if}
-  <OnboardingPrompt />
 {/if}
 
 <style>

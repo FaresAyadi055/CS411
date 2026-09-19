@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { Settings, Store, Bell, Coins } from '@lucide/svelte'
+  import { Settings, Store, Coins } from '@lucide/svelte'
   import { navigate, getRoute } from '../stores/router.svelte'
   import { t } from '../lib/i18n.svelte'
   import { getUser } from '../stores/auth.svelte'
-  import { notif, refreshUnread } from '../stores/notifications.svelte'
   import { getBusinessPoints, refreshBusinessPoints } from '../stores/businessPoints.svelte'
   import Tooltip from './Tooltip.svelte'
 
@@ -12,7 +11,6 @@
   $effect(() => {
     const u = getUser()
     if (!u) return
-    refreshUnread()
     if (u.role === 'business') refreshBusinessPoints()
   })
 </script>
@@ -51,23 +49,6 @@
       {/if}
 
       {#if getUser()}
-        <Tooltip text={t('nav.notifications')} position="bottom">
-          <button
-            onclick={() => navigate('notifications')}
-            class="relative p-2 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors"
-            class:text-primary={getRoute() === 'notifications'}
-            aria-label={t('nav.notifications')}
-          >
-            <Bell size={18} />
-            {#if notif.unreadCount > 0}
-              <span class="absolute -top-0.5 -end-0.5 min-w-[16px] h-4 px-1 rounded-full bg-error text-on-error text-[10px] font-bold flex items-center justify-center">
-                {notif.unreadCount > 99 ? '99+' : notif.unreadCount}
-              </span>
-            {/if}
-          </button>
-        </Tooltip>
-      {/if}
-
         <Tooltip text={t('nav.settings')} position="bottom">
           <button
             onclick={() => navigate('settings')}
@@ -78,6 +59,7 @@
             <Settings size={18} />
           </button>
         </Tooltip>
+      {/if}
       {/if}
 
     </div>

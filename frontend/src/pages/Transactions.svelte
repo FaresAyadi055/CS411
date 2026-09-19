@@ -9,7 +9,6 @@
     merchantId: string
     merchantName: string
     type: string
-    balanceType: 'fidelity' | 'meal_voucher'
     rewardId: string | null
     rewardTitle: string | null
     amount: number
@@ -28,7 +27,7 @@
   })
 
   function isEarned(type: string) {
-    return type === 'ADD_POINTS' || type === 'ADD_MEAL_VOUCHER'
+    return type === 'ADD_POINTS'
   }
 
   function label(tx: Tx) {
@@ -45,12 +44,6 @@
   }
 
   function formatAmount(tx: Tx) {
-    if (tx.balanceType === 'meal_voucher') {
-      return new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 3,
-        maximumFractionDigits: 3,
-      }).format(tx.amount)
-    }
     return String(tx.amount)
   }
 </script>
@@ -95,7 +88,7 @@
                 {label(tx)}
               </p>
               <p class="text-xs mt-1 {isEarned(tx.type) ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}">
-                {isEarned(tx.type) ? '+' : '-'}{formatAmount(tx)}{tx.balanceType === 'fidelity' ? ' ' + t('transactions.fidelity') : ' TND ' + t('transactions.meal')}
+                {isEarned(tx.type) ? '+' : '-'}{formatAmount(tx)} {t('transactions.fidelity')}
               </p>
             </div>
           </div>
