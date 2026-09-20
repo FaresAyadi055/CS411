@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS "merchant_staff" (
 
 CREATE INDEX IF NOT EXISTS "staff_merchant_idx" ON "merchant_staff" ("merchant_id");
 
--- 3. CUSTOMER BALANCES (Fidelity Points + Meal Voucher per Merchant)
+-- 3. CUSTOMER BALANCES (Fidelity Points per Merchant)
 CREATE TABLE IF NOT EXISTS "customer_cards" (
     "id"                      TEXT    PRIMARY KEY,
     "customer_id"             TEXT    NOT NULL REFERENCES "auth_users"("id") ON DELETE CASCADE,
@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS "rewards" (
 
 CREATE INDEX IF NOT EXISTS "rewards_merchant_idx" ON "rewards" ("merchant_id");
 
--- 5. AUDIT LOG TRANSACTIONS (Points & Meal Voucher)
+-- 5. AUDIT LOG TRANSACTIONS (Fidelity Points)
 CREATE TABLE IF NOT EXISTS "stamp_transactions" (
     "id"            TEXT    PRIMARY KEY,
     "merchant_id"   TEXT    NOT NULL REFERENCES "merchants"("id") ON DELETE CASCADE,

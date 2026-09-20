@@ -1,0 +1,23 @@
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: ./backend/.env.prod
+    environment:
+      - LOCAL_DB_PATH=file:/data/app.db
+    volumes:
+      - dbdata:/data
+    expose:
+      - "8787"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    # Quick tunnel: prints a random https://*.trycloudflare.com URL on start.
+    # No TUNNEL_TOKEN needed. Read it via: docker compose logs cloudflared
+    command: ["tunnel", "--no-autoupdate", "--url", "http://backend:8787"]
+    depends_on:
+      - backend
+
+volumes:
+  dbdata:
