@@ -78,8 +78,8 @@ async function main() {
     slug: 'cafe-bonjour',
     stampsPerReward: 10,
     planTier: 'growth',
-    pointsBalance: 0,
-    pointsFunded: 0,
+    pointsBalance: 100,
+    pointsFunded: 100,
     isActive: true,
     secretHmacKey: randomBytes(32).toString('hex'),
     createdAt: now,
@@ -146,7 +146,7 @@ async function main() {
   console.log('  admin    admin@example.com    / password123')
   console.log('  business business@example.com / password123')
   console.log('  client   client@example.com   / password123')
-  console.log('  merchant "Café Bonjour" (cafe-bonjour) with 2 rewards')
+  console.log('  merchant "Café Bonjour" (cafe-bonjour) with 2 rewards + 100 point balance')
   console.log('  client card: 7/10 fidelity points, 15 lifetime, 3 transactions')
   console.log('Done!')
 }

@@ -9,7 +9,7 @@ function base64UrlEncode(data: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-function base64UrlDecode(str: string): Uint8Array {
+function base64UrlDecode(str: string): Uint8Array<ArrayBuffer> {
   let base64 = str.replace(/-/g, '+').replace(/_/g, '/')
   while (base64.length % 4) base64 += '='
   const binary = atob(base64)

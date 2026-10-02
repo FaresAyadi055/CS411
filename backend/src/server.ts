@@ -1,3 +1,4 @@
+import { serve } from '@hono/node-server'
 import { createApp } from './app'
 import { env } from './config/env'
 import { db } from './db'
@@ -20,7 +21,7 @@ async function checkDbReady() {
     console.log('  Database:  ready')
   } catch (e) {
     console.error('Database not found or inaccessible:', e instanceof Error ? e.message : String(e))
-    console.error('Run: bun src/db/migrate.ts')
+    console.error('Run: pnpm run db:migrate:manual')
     process.exit(1)
   }
 }
@@ -30,12 +31,12 @@ const localIP = getLocalIP()
 
 checkDbReady().then(() => {
   startCleanup()
-  Bun.serve({
+  serve({
     fetch: app.fetch,
     port: env.port,
     hostname: '0.0.0.0',
   })
-  console.log(`\n  API running (Bun):`)
+  console.log(`\n  API running (Node):`)
   console.log(`    Local:   http://localhost:${env.port}`)
   console.log(`    Network: http://${localIP}:${env.port}\n`)
 })

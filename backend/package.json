@@ -4,29 +4,29 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently --names server,studio --prefix-colors blue,green \"bun --watch src/server.ts\" \"bun drizzle-kit studio\"",
-    "start": "bun src/server.ts",
-    "db:generate": "dotenv -e .env -- drizzle-kit generate",
-    "db:push": "dotenv -e .env -- drizzle-kit push",
-    "db:migrate": "dotenv -e .env -- drizzle-kit migrate",
-    "db:seed": "bun src/db/seed.ts",
-    "db:migrate:manual": "bun src/db/migrate.ts",
-    "build": "tsc",
+    "dev": "concurrently --names server,studio --prefix-colors blue,green \"tsx watch src/server.ts\" \"drizzle-kit studio\"",
+    "start": "tsx src/server.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx src/db/seed.ts",
+    "db:migrate:manual": "tsx src/db/migrate.ts",
+    "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.9",
     "@hono/zod-validator": "^0.8.0",
     "@libsql/client": "^0.14.0",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.19",
-    "resend": "^4.2.0",
+    "tsx": "^4.20.6",
     "ulid": "^2.3.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/bun": "latest",
+    "@types/node": "^24.12.4",
     "concurrently": "^10.0.5",
-    "dotenv-cli": "^7.4.4",
     "drizzle-kit": "^0.31.10",
     "typescript": "~6.0.3"
   }

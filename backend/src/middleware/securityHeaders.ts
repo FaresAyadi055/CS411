@@ -2,8 +2,8 @@ import { createMiddleware } from 'hono/factory'
 import { env } from '../config/env'
 
 function buildCsp(): string {
-  const backendOrigin = env.betterAuthUrl.startsWith('http')
-    ? new URL(env.betterAuthUrl).origin
+  const backendOrigin = env.backendUrl.startsWith('http')
+    ? new URL(env.backendUrl).origin
     : "'self'"
   const frontendOrigin = env.frontendUrl.startsWith('http')
     ? new URL(env.frontendUrl).origin

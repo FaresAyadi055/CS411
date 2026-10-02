@@ -118,10 +118,10 @@ Fidelito.tn — a digital loyalty card platform for small to medium Tunisian bus
 
 ### Seed Data
 
-Run `bun src/db/seed.ts` from the `backend/` directory. Seeds:
+Run `pnpm run db:seed` from the `backend/` directory. Seeds:
 
 - 3 users: admin, business, client (all `password123`)
-- 1 merchant: "Café Bonjour" (slug: `cafe-bonjour`, plan: growth)
+- 1 merchant: "Café Bonjour" (slug: `cafe-bonjour`, plan: growth) with a **100 point balance** (`pointsBalance` 100 / `pointsFunded` 100)
 - 2 rewards: Free Coffee (10 pts), Free Pastry (20 pts)
 - Client card: **7 fidelity points**, 15 lifetime, 3 transactions (earn 8, earn 7, redeem 8)
 

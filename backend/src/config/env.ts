@@ -1,4 +1,4 @@
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 import { networkInterfaces } from 'node:os'
 
@@ -6,14 +6,7 @@ import { networkInterfaces } from 'node:os'
 export interface CloudflareBindings {
   DEPLOYMENT_MODE?: string
   CORS_ORIGIN?: string
-  RESEND_API_KEY?: string
-  RESEND_FROM?: string
-  BETTER_AUTH_SECRET?: string
-  BETTER_AUTH_URL?: string
-  GOOGLE_CLIENT_ID?: string
-  GOOGLE_CLIENT_SECRET?: string
-  FACEBOOK_CLIENT_ID?: string
-  FACEBOOK_CLIENT_SECRET?: string
+  BACKEND_URL?: string
   PORT?: string
   LOCAL_DB_PATH?: string
   DISABLE_RATE_LIMITING?: string
@@ -21,23 +14,14 @@ export interface CloudflareBindings {
   FRONTEND_URL?: string
   USE_LOCAL_DB?: string
   COOKIE_SAMESITE?: string
-  VAPID_PUBLIC_KEY?: string
-  VAPID_PRIVATE_KEY?: string
-  VAPID_SUBJECT?: string
+  JWT_SECRET?: string
 }
 
 /** All keys we read from Worker env — must be listed explicitly (secrets are not enumerable). */
 export const BINDING_KEYS = [
   'DEPLOYMENT_MODE',
   'CORS_ORIGIN',
-  'RESEND_API_KEY',
-  'RESEND_FROM',
-  'BETTER_AUTH_SECRET',
-  'BETTER_AUTH_URL',
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
-  'FACEBOOK_CLIENT_ID',
-  'FACEBOOK_CLIENT_SECRET',
+  'BACKEND_URL',
   'PORT',
   'LOCAL_DB_PATH',
   'DISABLE_RATE_LIMITING',
@@ -46,9 +30,6 @@ export const BINDING_KEYS = [
   'USE_LOCAL_DB',
   'COOKIE_SAMESITE',
   'JWT_SECRET',
-  'VAPID_PUBLIC_KEY',
-  'VAPID_PRIVATE_KEY',
-  'VAPID_SUBJECT',
 ] as const satisfies readonly (keyof CloudflareBindings)[]
 
 let cfBindings: CloudflareBindings = {}
@@ -74,7 +55,7 @@ export function applyCfBindings(bindings: CloudflareBindings) {
 let defaultDbPath = 'file:../database/app.db'
 if (typeof import.meta !== 'undefined' && import.meta.url) {
   const __dirname = dirname(fileURLToPath(import.meta.url))
-  defaultDbPath = 'file:/' + join(__dirname, '../../../database/app.db').replace(/\\/g, '/')
+  defaultDbPath = pathToFileURL(join(__dirname, '../../../database/app.db')).href
 }
 
 function getLocalIP(): string {
@@ -139,31 +120,8 @@ export const env = {
   get corsOrigins() {
     return buildAllowedOrigins()
   },
-  get resendApiKey() {
-    return readBinding('RESEND_API_KEY') ?? ''
-  },
-  get betterAuthSecret() {
-    return (
-      readBinding('BETTER_AUTH_SECRET') || 'dev-only-better-auth-secret-min-32-chars!'
-    )
-  },
-  get betterAuthUrl() {
-    return readBinding('BETTER_AUTH_URL') ?? `http://localhost:${readBinding('PORT') ?? 8787}`
-  },
-  get resendFrom() {
-    return readBinding('RESEND_FROM') ?? 'AppBase <no-reply@example.com>'
-  },
-  get googleClientId() {
-    return readBinding('GOOGLE_CLIENT_ID') ?? ''
-  },
-  get googleClientSecret() {
-    return readBinding('GOOGLE_CLIENT_SECRET') ?? ''
-  },
-  get facebookClientId() {
-    return readBinding('FACEBOOK_CLIENT_ID') ?? ''
-  },
-  get facebookClientSecret() {
-    return readBinding('FACEBOOK_CLIENT_SECRET') ?? ''
+  get backendUrl() {
+    return readBinding('BACKEND_URL') ?? `http://localhost:${readBinding('PORT') ?? 8787}`
   },
   get disableRateLimiting() {
     return readBinding('DISABLE_RATE_LIMITING') === 'true'
@@ -173,15 +131,6 @@ export const env = {
   },
   get frontendUrl() {
     return readBinding('FRONTEND_URL') ?? 'http://localhost:5173'
-  },
-  get vapidPublicKey() {
-    return readBinding('VAPID_PUBLIC_KEY') ?? ''
-  },
-  get vapidPrivateKey() {
-    return readBinding('VAPID_PRIVATE_KEY') ?? ''
-  },
-  get vapidSubject() {
-    return readBinding('VAPID_SUBJECT') ?? 'mailto:hello@fidelito.tn'
   },
   get cookieSameSite() {
     const v = (readBinding('COOKIE_SAMESITE') ?? 'strict').toLowerCase()

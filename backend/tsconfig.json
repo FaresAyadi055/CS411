@@ -6,7 +6,7 @@
     "strict": true,
     "skipLibCheck": true,
     "lib": ["ESNext", "WebWorker"],
-    "types": ["bun"],
+    "types": ["node"],
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "outDir": "dist",

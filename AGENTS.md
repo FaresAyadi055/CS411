@@ -10,14 +10,14 @@ Fidelito.tn — a digital loyalty card platform for small to medium Tunisian bus
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Hono + Drizzle ORM + Better Auth |
+| Runtime | Node.js (`tsx` runs the TypeScript source directly) |
+| Backend | Hono + Drizzle ORM |
 | Database | SQLite (local file) with libSQL client |
-| Auth | Better Auth (email/password, bearer tokens, Google/Facebook OAuth, email OTP) |
+| Auth | Email/password with httpOnly JWT session cookie |
 | QR/TOTP | RFC 6238 TOTP (HMAC-SHA1, 6 digits, 30s period) — hand-rolled with Web Crypto |
 | Frontend | Svelte 5 (runes mode, CSR) + Vite 8 |
 | Styling | Tailwind CSS v4 |
 | Icons | @lucide/svelte |
-| Email | Resend (OTP verification/reset) |
 | Package | pnpm monorepo |
 
 ## Project Structure
@@ -27,12 +27,12 @@ Fidelito.tn — a digital loyalty card platform for small to medium Tunisian bus
 │   ├── backend/                    # Hono API server
 │   │   ├── src/
 │   │   │   ├── db/                 # Schema, manual migrations, seed
-│   │   │   ├── routes/             # API handlers (otp, me, admin, client, cashier, business)
-│   │   │   ├── services/           # Business logic (otp, totp, stamp, analytics)
-│   │   │   ├── middleware/         # Auth, rate limiting, role checks, security headers
-│   │   │   ├── config/             # Env configuration
+│   │   │   ├── routes/             # API handlers (auth, me, admin, client, cashier, business, public, uploads)
+│   │   │   ├── services/           # Business logic (totp, stamp, analytics)
+│   │   │   ├── middleware/         # Auth, role checks, security headers
+│   │   │   ├── config/             # Env configuration (all defaults hard-coded for local testing)
 │   │   │   └── lib/                # Shared utilities (password hashing, errors)
-│   │   └── .env
+│   │   └── .env.example            # optional — every value already has a built-in default
 │   └── frontend/                   # Svelte SPA
 ├── database/                       # SQLite DB + schema SQL
 └── pnpm-workspace.yaml
@@ -118,29 +118,31 @@ Fidelito.tn — a digital loyalty card platform for small to medium Tunisian bus
 
 ### Seed Data
 
-Run `bun src/db/seed.ts` from the `backend/` directory. Seeds:
+Run `pnpm run db:seed` from the `backend/` directory. Seeds:
 
 - 3 users: admin, business, client (all `password123`)
-- 1 merchant: "Café Bonjour" (slug: `cafe-bonjour`, plan: growth)
+- 1 merchant: "Café Bonjour" (slug: `cafe-bonjour`, plan: growth) with a **100 point balance** (`pointsBalance` 100 / `pointsFunded` 100)
 - 2 rewards: Free Coffee (10 pts), Free Pastry (20 pts)
 - Client card: **7 fidelity points**, 15 lifetime, 3 transactions (earn 8, earn 7, redeem 8)
 
 ### Environment Variables
 
+No `.env` file is required — every value below is hard-coded as a default in
+`backend/src/config/env.ts` (localhost only, no external services). Set an
+environment variable only to override a default.
+
 | Key | Default / Notes |
 |-----|----------------|
-| `DEPLOYMENT_MODE` | auto (`vps` or `cloudflare`) |
-| `CORS_ORIGIN` | auto-detected local IP |
-| `BETTER_AUTH_API_KEY` | fallback: `dev-only-better-auth-secret-min-32-chars!` |
-| `BETTER_AUTH_URL` | `http://localhost:8787` |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth |
-| `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` | Facebook OAuth |
-| `RESEND_API_KEY` / `RESEND_FROM` | Email via Resend |
+| `PORT` | `8787` |
+| `BACKEND_URL` | `http://localhost:8787` — backend origin (CSP `connect-src`) |
+| `FRONTEND_URL` | `http://localhost:5173` — used for CORS and redirect URLs |
+| `CORS_ORIGIN` | unset → `localhost`, `127.0.0.1` and the auto-detected LAN IP |
+| `LOCAL_DB_PATH` | unset → `<repo>/database/app.db` (absolute `file:` URL) |
+| `JWT_SECRET` | fallback: `dev-only-jwt-secret-min-32-chars!!` |
+| `COOKIE_SAMESITE` | `strict` (also accepts `lax` / `none`) |
+| `DEPLOYMENT_MODE` | `vps` (or `cloudflare`) |
 | `DISABLE_RATE_LIMITING` | `'true'` to disable rate limiting (dev only) |
 | `DISABLE_AUTH` | `'true'` to bypass auth middleware for local dev |
-| `LOCAL_DB_PATH` | `file:../database/app.db` — local SQLite path |
-| `PORT` | 8787 |
-| `FRONTEND_URL` | used for CORS and redirect URLs |
 
 ## Coding Conventions
 

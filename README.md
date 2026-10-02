@@ -9,7 +9,7 @@ Digital loyalty card PWA for Tunisian businesses. Customers get dynamic TOTP QR 
 pnpm install
 
 # Seed the demo database
-cd backend && bun src/db/seed.ts
+cd backend && pnpm run db:seed
 
 # Start dev server (backend + frontend)
 pnpm dev

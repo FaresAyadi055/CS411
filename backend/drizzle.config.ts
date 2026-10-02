@@ -1,9 +1,9 @@
 import { defineConfig } from 'drizzle-kit'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const localDbPath = 'file:/' + join(__dirname, '../database/app.db').replace(/\\/g, '/')
+const localDbPath = pathToFileURL(join(__dirname, '../database/app.db')).href
 
 export default defineConfig({
   schema: './src/db/schema.ts',
