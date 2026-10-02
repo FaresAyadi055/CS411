@@ -31,12 +31,26 @@ const localIP = getLocalIP()
 
 checkDbReady().then(() => {
   startCleanup()
-  serve({
-    fetch: app.fetch,
-    port: env.port,
-    hostname: '0.0.0.0',
+  const server = serve(
+    {
+      fetch: app.fetch,
+      port: env.port,
+      hostname: '0.0.0.0',
+    },
+    () => {
+      console.log(`\n  API running (Node):`)
+      console.log(`    Local:   http://localhost:${env.port}`)
+      console.log(`    Network: http://${localIP}:${env.port}\n`)
+    }
+  )
+  server.on('error', (err) => {
+    const code = (err as NodeJS.ErrnoException).code
+    if (code === 'EADDRINUSE') {
+      console.error(`\n  Port ${env.port} is already in use — another server is already running.`)
+      console.error(`  Stop it (lsof -i :${env.port}) or run with PORT=<other port> pnpm run dev\n`)
+    } else {
+      console.error('Server failed to start:', err.message)
+    }
+    process.exit(1)
   })
-  console.log(`\n  API running (Node):`)
-  console.log(`    Local:   http://localhost:${env.port}`)
-  console.log(`    Network: http://${localIP}:${env.port}\n`)
 })

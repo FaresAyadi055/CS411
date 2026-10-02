@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm -r run dev",
+    "dev": "concurrently -n api,web -c blue,green \"pnpm -C backend dev\" \"pnpm -C frontend dev\"",
+    "dev:api": "pnpm -C backend dev",
+    "dev:web": "pnpm -C frontend dev",
     "build": "pnpm -r run build",
     "deploy": "pnpm --filter @app/frontend exec wrangler deploy",
     "typecheck": "pnpm -r run typecheck"
@@ -11,5 +13,8 @@
   "packageManager": "pnpm@10.30.2",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   }
 }
