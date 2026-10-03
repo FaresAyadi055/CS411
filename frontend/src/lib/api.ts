@@ -1,4 +1,5 @@
-let BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8787' : '')
+const apiHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+let BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? `http://${apiHost}:8787` : '')
 console.log('API BASE:', BASE)
 
 export function getApiBase() {

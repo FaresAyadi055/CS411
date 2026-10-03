@@ -31,6 +31,7 @@ export function createApp() {
     cors({
       origin: (origin) => {
         if (!origin || origin === 'null') return null
+        if (env.deploymentMode !== 'cloudflare') return origin
         if (isLocalOrigin(origin)) return origin
         if (env.corsOrigins.includes(origin)) return origin
         try {
