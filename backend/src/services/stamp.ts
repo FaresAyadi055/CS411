@@ -1,4 +1,4 @@
-import { eq, and, sql } from 'drizzle-orm'
+import { eq, and, sql, isNotNull } from 'drizzle-orm'
 import { db } from '../db'
 import {
   merchants,
@@ -185,6 +185,48 @@ export async function verifyQrByCustomerId(
 
   return {
     customerId,
+    customerName: customer.name,
+    merchantId,
+    fidelityPoints: card.fidelityPoints,
+    lifetimePoints: card.lifetimePoints,
+  }
+}
+
+export async function verifyByTotpCodeOnly(
+  totpCode: string,
+  cashierId: string,
+): Promise<VerifyResult> {
+  const { merchantId } = await resolveCashierMerchant(cashierId)
+
+  const candidates = await db
+    .select({ id: authUsers.id, name: authUsers.name, totpSecret: authUsers.totpSecret })
+    .from(authUsers)
+    .where(
+      and(
+        isNotNull(authUsers.totpSecret),
+        sql`${authUsers.id} NOT IN (SELECT user_id FROM merchant_staff WHERE merchant_id = ${merchantId})`,
+      ),
+    )
+
+  const matches: { id: string; name: string }[] = []
+  for (const candidate of candidates) {
+    if (candidate.totpSecret && (await verifyTotp(candidate.totpSecret, totpCode))) {
+      matches.push({ id: candidate.id, name: candidate.name })
+    }
+  }
+
+  if (matches.length === 0) {
+    throw jsonError(400, 'Invalid or expired TOTP code', 'INVALID_TOTP')
+  }
+  if (matches.length > 1) {
+    throw jsonError(409, 'Code matches multiple customers — scan the full QR instead', 'AMBIGUOUS_CODE')
+  }
+
+  const customer = matches[0]!
+  const card = await getOrCreateCard(customer.id, merchantId)
+
+  return {
+    customerId: customer.id,
     customerName: customer.name,
     merchantId,
     fidelityPoints: card.fidelityPoints,

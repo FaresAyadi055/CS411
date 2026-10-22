@@ -167,7 +167,7 @@
     <div class="card p-6">
       <h2 class="font-semibold mb-4">{t('scan.enter_manually')}</h2>
       <form onsubmit={(e) => { e.preventDefault(); handleManualVerify() }} class="space-y-3">
-        <textarea bind:value={manualPayload} placeholder="Paste QR payload here" class="input-field min-h-[100px]"></textarea>
+        <textarea bind:value={manualPayload} placeholder="Paste the QR payload, or type the 6-digit code shown below the QR" class="input-field min-h-[100px]"></textarea>
         <div class="flex gap-2">
           <button type="button" onclick={() => { showManual = false }} class="btn btn-ghost flex-1">{t('common.cancel')}</button>
           <button type="submit" class="btn btn-primary flex-1">{t('scan.verify')}</button>

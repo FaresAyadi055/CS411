@@ -47,15 +47,20 @@
   }
 
   async function computeLocalQr(): Promise<boolean> {
-    const cached = loadQrSecret()
-    const s = secret || cached.secret
-    const uid = getUser()?.id || cached.userId
-    if (!s || !uid) return false
-    const code = await generateTotp(s)
-    totp = code
-    payload = buildQrPayload(uid, code)
-    await generateQr(payload)
-    return true
+    try {
+      if (typeof crypto === 'undefined' || !crypto.subtle) return false
+      const cached = loadQrSecret()
+      const s = secret || cached.secret
+      const uid = getUser()?.id || cached.userId
+      if (!s || !uid) return false
+      const code = await generateTotp(s)
+      totp = code
+      payload = buildQrPayload(uid, code)
+      await generateQr(payload)
+      return true
+    } catch {
+      return false
+    }
   }
 
   async function generateQr(text: string) {

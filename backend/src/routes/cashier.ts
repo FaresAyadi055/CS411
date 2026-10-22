@@ -20,6 +20,8 @@ const verifySchema = z.object({
   customerId: z.string().min(1).optional(),
 }).refine((d) => d.qrPayload || d.customerId, { message: 'qrPayload or customerId required' })
 
+const BARE_TOTP_CODE = /^\d{6}$/
+
 cashierRoutes.post('/verify', zValidator('json', verifySchema), async (c) => {
   const userId = c.get('userId')!
   const { qrPayload, customerId } = c.req.valid('json')
@@ -28,6 +30,11 @@ cashierRoutes.post('/verify', zValidator('json', verifySchema), async (c) => {
     if (customerId) {
       const { verifyQrByCustomerId } = await import('../services/stamp')
       const result = await verifyQrByCustomerId(customerId, qrPayload ?? '', userId)
+      return c.json(result)
+    }
+    if (qrPayload && BARE_TOTP_CODE.test(qrPayload)) {
+      const { verifyByTotpCodeOnly } = await import('../services/stamp')
+      const result = await verifyByTotpCodeOnly(qrPayload, userId)
       return c.json(result)
     }
     const result = await verifyQr(qrPayload!, userId)
